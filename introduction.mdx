@@ -13,13 +13,9 @@ $ lap claude-code-cli1
 
 ## How it works
 
-```mermaid
-flowchart LR
-  A["Agent<br/>stub_litellm_bb20"] --> V["Vault sidecar<br/>swaps stub → real"]
-  V --> D["Destination<br/>sk-real-..."]
-```
+<img src="/images/architecture.svg" alt="LiteLLM Agent Platform architecture: sandbox pod containing Claude Code, Codex, opencode, Agent SDK harnesses, with a vault sidecar that swaps stub credentials for real keys before outbound HTTPS" />
 
-The agent process only ever sees stub credentials. Real values exist in the vault sidecar's memory and on the wire — nowhere else.
+The agent process only ever sees stub credentials. The vault sidecar swaps them for real keys at the wire level, so real values exist only in the sidecar's memory — never in the agent process, never logged, never stored.
 
 ## Get started
 

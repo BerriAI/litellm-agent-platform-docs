@@ -19,82 +19,24 @@
         "tab": "Docs",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "Get started",
             "pages": [
               "introduction",
-              "quickstart",
-              "self-hosting"
+              "installation"
             ]
           },
           {
-            "group": "Core Concepts",
+            "group": "Quickstart",
             "pages": [
-              "concepts/agents",
-              "concepts/sessions",
-              "concepts/vault",
-              "concepts/harnesses"
+              "quickstart/claude-code"
             ]
           },
           {
-            "group": "Guides",
+            "group": "Learn",
             "pages": [
-              "guides/lap-cli",
-              "guides/skills",
-              "guides/memory",
-              "guides/integrations-linear",
-              "guides/warm-pool"
-            ]
-          },
-          {
-            "group": "Configuration",
-            "pages": [
-              "configuration/environment",
-              "configuration/deploy-aws"
-            ]
-          },
-          {
-            "group": "Troubleshooting",
-            "pages": [
-              "troubleshooting/faq",
-              "troubleshooting/session-issues"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "Overview",
-            "pages": [
-              "api-reference/overview"
-            ]
-          },
-          {
-            "group": "Agents",
-            "pages": [
-              "api-reference/agents/list",
-              "api-reference/agents/create",
-              "api-reference/agents/get",
-              "api-reference/agents/update",
-              "api-reference/agents/delete"
-            ]
-          },
-          {
-            "group": "Sessions",
-            "pages": [
-              "api-reference/sessions/create",
-              "api-reference/sessions/get",
-              "api-reference/sessions/send-message",
-              "api-reference/sessions/stop",
-              "api-reference/sessions/delete"
-            ]
-          },
-          {
-            "group": "Skills & Memory",
-            "pages": [
-              "api-reference/skills",
-              "api-reference/memory"
+              "learn/architecture",
+              "learn/vault-proxy",
+              "learn/sandboxes"
             ]
           }
         ]

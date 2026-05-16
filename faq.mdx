@@ -1,0 +1,35 @@
+---
+title: "FAQ"
+description: "Common questions about LiteLLM Agent Platform."
+---
+
+## What sandbox technology does this use?
+
+Sandboxes are Kubernetes pods managed by the [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) CRD. Local dev runs on [kind](https://kind.sigs.k8s.io/); production runs on EKS / GKE / AKS / on-prem — anywhere you can run Kubernetes.
+
+The CRD also supports gVisor and Kata runtime classes via `runtimeClass` if you need stronger isolation than vanilla pod boundaries.
+
+## Can I use this with the LiteLLM AI Gateway?
+
+Yes — and it's required. LAP routes every model call through a LiteLLM gateway. Set `LITELLM_API_BASE` and `LITELLM_API_KEY` when you deploy the platform; the [vault proxy](/learn/vault-proxy) delivers the real key on each outbound request so the agent process only ever sees a stub.
+
+## What agent harnesses are supported?
+
+Four out of the box:
+
+- **Claude Code** and **Codex** — interactive terminal (TUI) harnesses, attach with `lap`
+- **opencode** and **Claude Agent SDK** — API harnesses, drive with `POST /sessions/{id}/message`
+
+See [Sandboxes → Harness types](/learn/sandboxes#harness-types).
+
+## How long do sessions stay alive?
+
+24 hours of idle time. Any message or terminal activity resets the countdown. After 24h with no traffic, the reconciler reaps the pod and the session flips to `dead`.
+
+## How do I detach from a TUI session without killing it?
+
+Press **Ctrl-D** in `lap`. The session stays alive; reconnect by running `lap <agent-name>` again.
+
+## Can the agent see my real API keys?
+
+No. The agent process only ever holds stub credentials in its environment. Real values exist only in the vault sidecar's memory and on the wire. Even an agent running with bypass-permissions can't exfiltrate the real keys — it doesn't have them. See [Vault proxy](/learn/vault-proxy).

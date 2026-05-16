@@ -1,0 +1,56 @@
+---
+title: "Sandboxes"
+description: "How agent sessions run as isolated Kubernetes pods."
+---
+
+A sandbox is one Kubernetes pod that runs a single agent session. It contains the harness container (the agent itself) and the vault sidecar.
+
+## Session lifecycle
+
+| Status | What it means |
+|---|---|
+| `creating` | Provisioning the pod and starting the harness. |
+| `ready` | Harness is up and accepting messages or terminal attaches. |
+| `dead` | Session ended — explicitly stopped or reaped after 24h idle. |
+| `failed` | Could not reach `ready`. `failure_reason` explains why. |
+
+## Idle timeout
+
+A `ready` session that receives no traffic for 24 hours is reaped by the reconciler. The pod is deleted; status flips to `dead`. The countdown resets on every message or terminal interaction.
+
+Press **Ctrl-D** in `lap` to detach without stopping — the session stays alive; reconnect with `lap <agent-name>`.
+
+## Per-session env vars
+
+Pass short-lived secrets the vault should proxy but never persist:
+
+```bash
+curl -s $LAP_URL/api/v1/managed_agents/agents/$AGENT_ID/session \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "open a PR",
+    "env_vars": {
+      "GITHUB_TOKEN": "ghp_...",
+      "CIRCLECI_TOKEN": "cci_..."
+    }
+  }'
+```
+
+Constraints (enforced at create time):
+
+- ≤ 50 keys
+- ≤ 16 KB total
+- Keys match `^[A-Za-z_][A-Za-z0-9_]*$`
+- Cannot overlap [reserved keys](/learn/vault-proxy#reserved-env-keys)
+
+## Harness types
+
+| Harness | `harness_id` | Interface | Best for |
+|---|---|---|---|
+| Claude Code | `claude-code` | PTY over WebSocket | Interactive terminal work |
+| Codex | `codex` | PTY over WebSocket | Interactive terminal work |
+| opencode | `opencode` | JSON message API | Automation, CI |
+| Claude Agent SDK | `claude-agent-sdk` | JSON message API | Automation with Anthropic's SDK |
+
+TUI harnesses (Claude Code, Codex) attach with `lap`. API harnesses receive messages via `POST /sessions/{id}/message`.

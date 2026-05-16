@@ -1,0 +1,32 @@
+---
+title: "Architecture"
+description: "How LAP runs coding agents on Kubernetes with isolation and credential safety."
+---
+
+<img src="https://raw.githubusercontent.com/BerriAI/litellm-docs/main/static/img/litellm_agent_platform_alpha.png" alt="LAP architecture" />
+
+## Components
+
+| Component | Where it runs | What it does |
+|---|---|---|
+| Web | Next.js app (Render / EKS) | UI, REST API, session orchestration |
+| Worker | Background process | Reconciler for session lifecycle, idle reaping |
+| Sandbox controller | Kubernetes (kind / EKS) | Manages `Sandbox` custom resources from [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) |
+| Harness pod | Inside the sandbox | Runs the agent — Claude Code, Codex, opencode, claude-agent-sdk |
+| Vault sidecar | Inside the sandbox | HTTPS proxy; swaps stub credentials for real keys at the wire |
+
+## Request flow
+
+1. Client (UI / CLI / API) hits the web service.
+2. Web creates a `Sandbox` CR; the controller schedules a pod.
+3. Pod boots with vault sidecar + harness container. Stubs are injected into the harness env.
+4. Harness clones the repo, installs deps, listens on its protocol — JSON (`/message`) or PTY (`/tty`).
+5. Client streams messages or attaches a terminal.
+6. Outbound HTTPS from the harness flows through the vault sidecar, which swaps stubs for real credentials.
+
+## Why Kubernetes
+
+- Portable: kind locally, EKS / GKE / AKS / on-prem in production.
+- Pod-level isolation, RBAC, network policies — off-the-shelf.
+- gVisor / Kata runtimes available via the CRD's `runtimeClass`.
+- No cloud-provider lock-in for the sandbox runtime path.

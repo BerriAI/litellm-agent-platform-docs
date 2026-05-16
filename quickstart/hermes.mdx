@@ -1,0 +1,47 @@
+---
+title: "Hermes"
+description: "Open a Kubernetes-sandboxed Hermes Agent session from your terminal."
+---
+
+The `lap` CLI talks to a running LAP instance. If you haven't deployed one yet, see [Installation](/installation).
+
+## 1. Install the CLI
+
+```bash
+git clone https://github.com/BerriAI/litellm-agent-platform.git
+cd litellm-agent-platform/cli && npm install
+ln -sf "$PWD/bin/lap.mjs" ~/.local/bin/lap
+```
+
+## 2. Point it at your platform
+
+```bash
+lap login
+```
+
+Enter your LAP URL and `MASTER_KEY`.
+
+## 3. Create a Hermes agent
+
+In the UI choose **hermes** from the Harness picker and pick a model, or via API:
+
+```bash
+curl -X POST $LAP_URL/api/v1/managed_agents/agents \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-hermes","harness_id":"hermes","model":"openai/gpt-4o"}'
+```
+
+Hermes accepts any model your LiteLLM gateway can route. Inside the TUI you can also `hermes model` to switch on the fly.
+
+## 4. Open the sandbox
+
+```bash
+lap my-hermes
+```
+
+That spins up a fresh Kubernetes pod running [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) in `--tui` mode (the Ink-based interactive UI), attaches your local terminal to its TTY over a WebSocket, and drops you straight into the agent.
+
+The harness routes Hermes through your LiteLLM gateway by mapping `LITELLM_API_BASE` / `LITELLM_API_KEY` → `OPENAI_BASE_URL` / `OPENAI_API_KEY` at boot — so Hermes talks to your gateway as if it were OpenAI direct, including for non-OpenAI providers.
+
+Hermes persists state under `~/.hermes/` (sessions, memories, skills) inside the pod's writable filesystem. State does not survive across fresh `lap` sessions.

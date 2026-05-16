@@ -1,0 +1,58 @@
+---
+title: "Installation"
+description: "Run LiteLLM Agent Platform locally on kind, or deploy to AWS EKS for production."
+---
+
+Sandboxes run on Kubernetes via the [agent-sandbox CRD](https://github.com/kubernetes-sigs/agent-sandbox). Local dev uses [kind](https://kind.sigs.k8s.io/).
+
+## Prerequisites
+
+- Docker Desktop
+- `kind`, `kubectl`, `helm`
+- A LiteLLM gateway URL and API key
+
+## Local
+
+```bash
+git clone https://github.com/BerriAI/litellm-agent-platform.git
+cd litellm-agent-platform
+cp .env.example .env   # fill in DATABASE_URL, MASTER_KEY, LITELLM_API_BASE, LITELLM_API_KEY
+bin/kind-up.sh
+docker compose up
+```
+
+`bin/kind-up.sh` is idempotent — it provisions a kind cluster `agent-sbx`, installs the sandbox controller, and loads the harness image. `docker compose up` boots Postgres, runs the migration, and starts web (`:3000`) + worker.
+
+Open [localhost:3000](http://localhost:3000), sign in with `MASTER_KEY`, create an agent. Then jump to the [Claude Code quickstart](/quickstart/claude-code).
+
+<Note>
+  `DATABASE_URL` must be a direct (non-pooled) Postgres connection. Prisma migrations need advisory locks that pgbouncer blocks.
+</Note>
+
+## Tear down
+
+```bash
+kind delete cluster --name agent-sbx
+```
+
+## Production
+
+Recommended: AWS EKS for the sandbox cluster, Render for web + worker.
+
+- `bin/eks-up.sh` provisions the EKS cluster with the right node groups and the sandbox controller installed.
+- `deploy/render/README.md` includes a Render Blueprint — one click to deploy web + worker.
+
+### Required env vars
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Direct Postgres connection string. |
+| `MASTER_KEY` | API authentication secret. |
+| `LITELLM_API_BASE` | LiteLLM gateway URL. |
+| `LITELLM_API_KEY` | LiteLLM gateway key. |
+| `BASE_URL` | Public URL of the LAP deployment. |
+| `ENCRYPTION_KEY` | Base64-encoded 32-byte key. Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
+
+<Warning>
+  Never set `K8S_SKIP_TLS_VERIFY=true` against a production cluster — it disables TLS verification entirely.
+</Warning>

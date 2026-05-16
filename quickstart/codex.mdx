@@ -1,0 +1,43 @@
+---
+title: "Codex"
+description: "Open a Kubernetes-sandboxed OpenAI Codex session from your terminal."
+---
+
+The `lap` CLI talks to a running LAP instance. If you haven't deployed one yet, see [Installation](/installation).
+
+## 1. Install the CLI
+
+```bash
+git clone https://github.com/BerriAI/litellm-agent-platform.git
+cd litellm-agent-platform/cli && npm install
+ln -sf "$PWD/bin/lap.mjs" ~/.local/bin/lap
+```
+
+## 2. Point it at your platform
+
+```bash
+lap login
+```
+
+Enter your LAP URL and `MASTER_KEY`.
+
+## 3. Create a Codex agent
+
+In the UI choose **codex** from the Harness picker and pick an OpenAI model, or via API:
+
+```bash
+curl -X POST $LAP_URL/api/v1/managed_agents/agents \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-codex","harness_id":"codex","model":"openai/gpt-4o"}'
+```
+
+## 4. Open the sandbox
+
+```bash
+lap my-codex
+```
+
+That spins up a fresh Kubernetes pod running the OpenAI Codex CLI, attaches your local terminal to its TTY over a WebSocket, and drops you straight into the agent.
+
+The harness routes Codex through your LiteLLM gateway by mapping `LITELLM_API_BASE` / `LITELLM_API_KEY` → `OPENAI_BASE_URL` / `OPENAI_API_KEY` at boot — so Codex talks to your gateway as if it were OpenAI direct.

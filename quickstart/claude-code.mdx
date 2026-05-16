@@ -7,30 +7,45 @@ description: "Open a Kubernetes-sandboxed Claude Code session from your terminal
 
 The `lap` CLI talks to a running LAP instance. If you haven't deployed one yet, see [Installation](/installation).
 
-## 1. Install the CLI
+<Note>
+  First time? Install the CLI:
 
-```bash
-git clone https://github.com/BerriAI/litellm-agent-platform.git
-cd litellm-agent-platform/cli && npm install
-ln -sf "$PWD/bin/lap.mjs" ~/.local/bin/lap
-```
+  ```bash
+  git clone https://github.com/BerriAI/litellm-agent-platform.git
+  cd litellm-agent-platform/cli && npm install
+  ln -sf "$PWD/bin/lap.mjs" ~/.local/bin/lap
+  ```
+</Note>
 
-## 2. Point it at your platform
+## 1. Log in
 
 ```bash
 lap login
 ```
 
-Enter your LAP URL and `MASTER_KEY`.
+Paste your LAP URL and `MASTER_KEY` when prompted. Saved to `~/.lap/config.json`.
 
-## 3. Open a sandbox
+## 2. Open an agent
 
 ```bash
-lap claude-code-cli1
+lap
 ```
 
-That spins up a fresh Kubernetes pod running Claude Code, attaches your local terminal to its TTY over a WebSocket, and drops you straight into the agent.
+Pick your Claude Code agent from the interactive list. `lap` spins up a Kubernetes-sandboxed pod running Claude Code, attaches your local terminal to its TTY over a WebSocket, and drops you straight in.
 
 The pod's env contains only stub credentials. The [vault proxy](/learn/vault-proxy) swaps them for real keys on every outbound TLS connection.
 
-Press **Ctrl-D** to detach — the session stays alive for 24h. Reconnect by running `lap <agent-name>` again.
+Press **Ctrl-D** to detach — the session stays alive for 24h. Run `lap` again and pick the same agent to reattach.
+
+---
+
+## Creating an agent
+
+If you're setting up the platform, create a Claude Code agent first. In the UI choose **claude-code** from the Harness picker and pick a model, or via API:
+
+```bash
+curl -X POST $LAP_URL/api/v1/managed_agents/agents \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-claude","harness_id":"claude-code","model":"anthropic/claude-sonnet-4"}'
+```

@@ -1,18 +1,36 @@
 ---
-title: "LiteLLM Agent Platform"
-description: "Self-hosted infrastructure for running coding agents in isolated sandboxes with a credential vault."
+title: "Run agents in sandboxes."
+description: "Without giving them your keys."
 ---
 
-LiteLLM Agent Platform is self-hosted infrastructure for running coding agents — Claude Code, Codex, anything — inside isolated sandboxes with a credential vault, so agents can run with bypass-permissions on without ever seeing your real keys.
+Self-hosted Kubernetes infrastructure for Claude Code, Codex, and any coding agent. A vault proxy swaps stub credentials for real keys at the wire level — agents never hold the real values.
 
-Use it from the `lap` CLI in your terminal, the web UI, or call the API directly.
+<img src="/images/lap-demo.gif" alt="LiteLLM Agent Platform demo" />
+
+```bash
+$ lap claude-code-cli1
+```
 
 ## How it works
 
-Every session runs in a fresh Kubernetes pod. The pod's environment contains only stub credentials (e.g. `GITHUB_TOKEN=stub_github_a8f1`); a vault sidecar swaps stubs for real keys at the wire level on every outbound TLS connection. The agent process never holds the real values.
+```mermaid
+flowchart LR
+  A["Agent<br/>stub_litellm_bb20"] --> V["Vault sidecar<br/>swaps stub → real"]
+  V --> D["Destination<br/>sk-real-..."]
+```
+
+The agent process only ever sees stub credentials. Real values exist in the vault sidecar's memory and on the wire — nowhere else.
 
 ## Get started
 
-1. **[Install](/installation)** — run LAP locally with kind, or deploy to AWS EKS.
-2. **[Run Claude Code](/quickstart/claude-code)** — open your first sandbox from the terminal.
-3. **[Learn how it works](/learn/architecture)** — sandboxes, vault, and the system architecture.
+<CardGroup cols={3}>
+  <Card title="Install" icon="bolt" href="/installation">
+    Run locally on kind, or deploy to AWS EKS.
+  </Card>
+  <Card title="Run Claude Code" icon="robot" href="/quickstart/claude-code">
+    Open your first sandbox from the terminal.
+  </Card>
+  <Card title="Learn the vault" icon="shield-halved" href="/learn/vault-proxy">
+    How agents stay isolated from real credentials.
+  </Card>
+</CardGroup>

@@ -38,6 +38,12 @@
               "learn/vault-proxy",
               "learn/sandboxes"
             ]
+          },
+          {
+            "group": "FAQ",
+            "pages": [
+              "faq"
+            ]
           }
         ]
       }

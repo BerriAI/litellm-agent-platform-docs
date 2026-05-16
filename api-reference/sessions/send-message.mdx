@@ -1,0 +1,103 @@
+---
+title: "POST /api/v1/managed_agents/sessions/{session_id}/message"
+description: "Sends a message to a ready session and waits synchronously for the agent to reply. Returns the agent's response as a list of typed message parts."
+---
+
+Sends a user message to an agent session. The request is **synchronous** — it waits for the agent to finish processing and returns the reply in the response body. The message is appended to the session's conversation history.
+
+The session must be in `ready` status. If the session is still `creating`, wait for `GET /sessions/{id}` to return `status: "ready"` before calling this endpoint.
+
+<Note>
+  This endpoint applies only to API harnesses (`opencode`, `claude-agent-sdk`). TUI harnesses (`claude-code`, `codex`) expose a PTY via WebSocket (`tty_url`) and do not use this endpoint.
+</Note>
+
+## Request
+
+```
+POST /api/v1/managed_agents/sessions/{session_id}/message
+```
+
+**Headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <MASTER_KEY>` |
+| `Content-Type` | `application/json` |
+
+## Path parameters
+
+<ParamField path="session_id" type="string" required>
+  The unique ID of the session to send a message to.
+</ParamField>
+
+## Body parameters
+
+Provide either `text` or `parts` — not both.
+
+<ParamField body="text" type="string">
+  Plain-text message to send. The platform wraps this into a `{ type: "text", text: "..." }` part before forwarding to the harness.
+</ParamField>
+
+<ParamField body="parts" type="array">
+  Structured message parts in the harness wire format. Each part is an object with at minimum a `type` field. Use this when you need to send multimodal content or tool results directly.
+</ParamField>
+
+## Response
+
+Returns the agent's reply as a JSON object:
+
+<ResponseField name="parts" type="array">
+  Array of message parts from the agent. Each part has at minimum:
+
+  <Expandable title="part fields">
+    <ResponseField name="type" type="string">
+      Part type, e.g. `text`.
+    </ResponseField>
+    <ResponseField name="text" type="string">
+      The agent's reply text. Present when `type` is `text`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Error responses
+
+| Status | Meaning |
+|--------|---------|
+| `404` | Session not found or not in `ready` state |
+| `502` | Harness request failed (sandbox unreachable or returned 5xx) |
+
+A `502` with a hard connect failure also marks the session `dead` immediately, so you can see the failure without waiting for the reconciler.
+
+## Example
+
+<RequestExample>
+
+```bash cURL
+curl -X POST "https://<your-platform-host>/api/v1/managed_agents/sessions/ses_01kabc/message" \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Summarize the largest file changed in the latest PR."}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200
+{
+  "parts": [
+    {
+      "type": "text",
+      "text": "The largest file changed in the latest PR is `src/server/k8s.ts` (+342 lines). It adds the Sandbox CR reconciler and warm-pool top-up logic..."
+    }
+  ]
+}
+```
+
+```json 404
+{
+  "error": "session ses_01kabc not found or not ready"
+}
+```
+
+</ResponseExample>

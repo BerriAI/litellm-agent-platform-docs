@@ -1,0 +1,39 @@
+---
+title: "POST /api/v1/managed_agents/sessions/{session_id}/stop"
+description: "Gracefully stops a running session, marks it dead, and releases the sandbox pod. Use this to free cluster resources when a session is no longer needed."
+---
+
+Stops a running session and cleans up its sandbox pod. The session is marked `dead` and the pod is terminated. Use this endpoint to release cluster resources when you are finished with a session.
+
+## Request
+
+```
+POST /api/v1/managed_agents/sessions/{session_id}/stop
+```
+
+**Headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <MASTER_KEY>` |
+
+## Path parameters
+
+<ParamField path="session_id" type="string" required>
+  The unique ID of the session to stop.
+</ParamField>
+
+## Response
+
+Returns `200 OK` on success.
+
+## Example
+
+<RequestExample>
+
+```bash cURL
+curl -X POST "https://<your-platform-host>/api/v1/managed_agents/sessions/ses_01kabc/stop" \
+  -H "Authorization: Bearer $MASTER_KEY"
+```
+
+</RequestExample>

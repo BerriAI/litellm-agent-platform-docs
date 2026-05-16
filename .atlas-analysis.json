@@ -1,0 +1,138 @@
+{
+  "projectType": "saas",
+  "projectName": "LiteLLM Agent Platform",
+  "projectDescription": "Self-hosted platform for running coding agents (Claude Code, Codex, and others) in isolated Kubernetes sandboxes with a credential vault proxy that keeps secrets away from agents.",
+  "theme": "luma",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "self-hosting"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/agents",
+              "concepts/sessions",
+              "concepts/vault",
+              "concepts/harnesses"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/lap-cli",
+              "guides/skills",
+              "guides/memory",
+              "guides/integrations-linear",
+              "guides/warm-pool"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment",
+              "configuration/deploy-aws"
+            ]
+          },
+          {
+            "group": "Troubleshooting",
+            "pages": [
+              "troubleshooting/faq",
+              "troubleshooting/session-issues"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/overview"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "api-reference/agents/list",
+              "api-reference/agents/create",
+              "api-reference/agents/get",
+              "api-reference/agents/update",
+              "api-reference/agents/delete"
+            ]
+          },
+          {
+            "group": "Sessions",
+            "pages": [
+              "api-reference/sessions/create",
+              "api-reference/sessions/get",
+              "api-reference/sessions/send-message",
+              "api-reference/sessions/stop",
+              "api-reference/sessions/delete"
+            ]
+          },
+          {
+            "group": "Skills & Memory",
+            "pages": [
+              "api-reference/skills",
+              "api-reference/memory"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Isolated Kubernetes sandbox execution for coding agents",
+    "Credential vault proxy — agents see only stub tokens, never real secrets",
+    "Multiple harness types: Claude Code, Codex (TUI), opencode, claude-agent-sdk (API)",
+    "`lap` CLI for attaching a local terminal to a remote sandbox over WebSocket",
+    "Warm pool — pre-provisioned sandbox pods for sub-2s session starts",
+    "Skills library — reusable system-prompt blocks attached to agents",
+    "Per-agent and per-session memory store",
+    "Linear OAuth integration — delegate Linear issues to agents automatically",
+    "REST API for programmatic agent and session management",
+    "Self-hostable on Kubernetes (kind for local dev, EKS / GKE / AKS for production)"
+  ],
+  "publicApiSurface": [
+    "GET  /api/v1/managed_agents/agents",
+    "POST /api/v1/managed_agents/agents",
+    "GET  /api/v1/managed_agents/agents/{agent_id}",
+    "PATCH /api/v1/managed_agents/agents/{agent_id}",
+    "DELETE /api/v1/managed_agents/agents/{agent_id}",
+    "POST /api/v1/managed_agents/agents/{agent_id}/session",
+    "POST /api/v1/managed_agents/agents/{agent_id}/skill",
+    "GET  /api/v1/managed_agents/agents/{agent_id}/memory",
+    "POST /api/v1/managed_agents/agents/{agent_id}/memory",
+    "GET  /api/v1/managed_agents/sessions/{session_id}",
+    "POST /api/v1/managed_agents/sessions/{session_id}/message",
+    "POST /api/v1/managed_agents/sessions/{session_id}/stop",
+    "DELETE /api/v1/managed_agents/sessions/{session_id}",
+    "GET  /api/v1/managed_agents/sessions/{session_id}/diagnose",
+    "GET  /api/v1/skills",
+    "POST /api/v1/skills",
+    "GET  /api/v1/skills/{skill_id}",
+    "PATCH /api/v1/skills/{skill_id}",
+    "DELETE /api/v1/skills/{skill_id}",
+    "GET  /api/integrations/oauth/linear/authorize",
+    "GET  /api/integrations/oauth/linear/callback",
+    "POST /api/integrations/webhooks/linear",
+    "lap login",
+    "lap <agent-name>",
+    "lap agents",
+    "lap config",
+    "lap logout"
+  ]
+}

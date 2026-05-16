@@ -1,0 +1,49 @@
+---
+title: "DELETE /api/v1/managed_agents/agents/{agent_id}"
+description: "Deletes an agent by ID, stops all active sessions and sandbox pods associated with it. Returns 204 No Content. Nonexistent agents return 404."
+---
+
+Deletes an agent and stops any active sessions associated with it. Returns `404` if the agent does not exist.
+
+## Request
+
+```
+DELETE /api/v1/managed_agents/agents/{agent_id}
+```
+
+**Headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <MASTER_KEY>` |
+
+## Path parameters
+
+<ParamField path="agent_id" type="string" required>
+  The unique ID of the agent to delete.
+</ParamField>
+
+## Response
+
+Returns `204 No Content` on success with no response body.
+
+## Example
+
+<RequestExample>
+
+```bash cURL
+curl -X DELETE "https://<your-platform-host>/api/v1/managed_agents/agents/agt_01j9xyz" \
+  -H "Authorization: Bearer $MASTER_KEY"
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 404
+{
+  "error": "agent 'agt_01j9xyz' not found"
+}
+```
+
+</ResponseExample>

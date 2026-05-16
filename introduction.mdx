@@ -1,0 +1,64 @@
+---
+title: "LiteLLM Agent Platform: isolated agent sandboxes"
+description: "Self-hosted platform for running Claude Code, Codex, opencode, and claude-agent-sdk in isolated Kubernetes sandboxes with a built-in credential vault."
+---
+
+LiteLLM Agent Platform (LAP) is self-hosted infrastructure for running coding agents inside isolated Kubernetes sandboxes. Each sandbox gets a credential vault that replaces your real API keys and tokens with stub placeholders — the agent process can never read the real values, because the vault sidecar swaps them for real credentials at the wire level on every outbound TLS connection. You interact with sandboxes through the `lap` CLI, the web UI, or the REST API.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Isolated sandboxes" icon="box">
+    Every session runs in its own Kubernetes pod. Agents are fully isolated from each other and from the host environment.
+  </Card>
+  <Card title="Credential vault" icon="shield-halved">
+    Agents receive stub tokens (e.g. `GITHUB_TOKEN=stub_github_a8f1`). The vault sidecar intercepts outbound HTTPS and swaps stubs for real keys before the request leaves the pod.
+  </Card>
+  <Card title="Terminal-first CLI" icon="terminal">
+    The `lap` CLI attaches your local terminal to a sandbox over WebSocket — same feel as SSH, but sandboxed. `SIGWINCH` is forwarded so your window size tracks perfectly.
+  </Card>
+  <Card title="Multiple harness types" icon="puzzle-piece">
+    Run Claude Code, Codex (TUI harnesses) or opencode, claude-agent-sdk (API harnesses) — each in its own pre-configured container image.
+  </Card>
+  <Card title="Warm pool" icon="bolt">
+    Pre-provisioned pods wait in the cluster so session creates are near-instant. With a warm pool, a new sandbox is ready in under two seconds.
+  </Card>
+  <Card title="Web UI and REST API" icon="code">
+    Create agents, manage sessions, and send messages through the browser or directly with `curl`. Full OpenAPI-compatible REST API included.
+  </Card>
+</CardGroup>
+
+## The vault proxy
+
+Every sandbox pod runs a vault sidecar that proxies all HTTPS egress. When the agent makes an outbound TLS connection, the sidecar intercepts it and replaces any stub credential in the request with the real value — before the bytes leave the node.
+
+The agent process sees only stubs:
+
+```
+GITHUB_TOKEN=stub_github_a8f1
+LITELLM_API_KEY=stub_litellm_bb20
+```
+
+The wire carries real values. The agent can `echo $GITHUB_TOKEN` and only ever gets the stub back — the real token is never in the process environment.
+
+## Available harness types
+
+| Harness | Type | Description |
+|---|---|---|
+| `claude-code` | TUI | Claude Code CLI under `node-pty`, attached to your terminal via WebSocket |
+| `codex` | TUI | OpenAI Codex CLI, same PTY-over-WebSocket model |
+| `opencode` | API | opencode in server mode; interact via `POST /sessions/{id}/message` |
+| `claude-agent-sdk` | API | Anthropic Claude Agent SDK; task-based, no TTY required |
+
+TUI harnesses are designed for interactive terminal use with `lap`. API harnesses accept structured messages and return structured replies, making them well-suited for automation and programmatic workflows.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install the `lap` CLI and open your first sandbox in minutes.
+  </Card>
+  <Card title="Self-hosting" icon="server" href="/self-hosting">
+    Deploy LAP on Kubernetes locally with kind, or on AWS EKS for production.
+  </Card>
+</CardGroup>

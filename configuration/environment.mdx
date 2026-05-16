@@ -1,0 +1,101 @@
+---
+title: "Environment variable reference for LiteLLM Agent Platform"
+description: "Environment variables that control platform behavior, sandbox runtime, warm pool, and integrations for a LiteLLM Agent Platform deployment."
+---
+
+Every aspect of a LiteLLM Agent Platform (LAP) deployment is configured through environment variables. For local development, set these in `.env` at the project root. For production deployments, inject them as Kubernetes Secret values or through your hosting provider's environment dashboard.
+
+<Note>
+The platform validates all required variables at startup. If any required variable is missing or invalid, the process exits with a clear error message listing every failing key. See `.env.example` in the repository for a reference template.
+</Note>
+
+## Required variables
+
+These variables must be set for the platform to start.
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string. Must be a **direct, non-pooled** connection — Prisma uses advisory locks during migrations that poolers such as PgBouncer block. On Neon, select "Direct" from the Connection Details dropdown. |
+| `MASTER_KEY` | Bearer token used for all API calls and as the password on the web UI login screen. Minimum 8 characters. Treat this as a production secret. |
+| `LITELLM_API_BASE` | Base URL of your LiteLLM gateway (e.g. `https://your-litellm-proxy.example.com`). The harness containers call this to reach language models. |
+| `LITELLM_API_KEY` | API key for the LiteLLM gateway above. This key is passed to sandbox pods via the vault mechanism — agents see only a stub placeholder, never the real value. |
+| `PREINSTALLED_GITHUB_REPO` | Git repository URL cloned into each sandbox pod at session start when the agent has no `repo_url` set. Defaults to `https://github.com/BerriAI/litellm` in the example file; set it to your own repository. |
+
+## Auth
+
+| Variable | Default | Description |
+|---|---|---|
+| `UI_USERNAME` | `admin` | Display name shown on the web UI login screen. This is cosmetic — it does not affect authentication, which uses `MASTER_KEY`. |
+
+## Sandbox runtime
+
+These variables control how the platform creates and manages Kubernetes sandbox pods.
+
+### Container images
+
+The platform snapshots the harness image into each agent record at creation time. Existing agents keep their image even after you update these variables — delete and recreate an agent to pick up a new image.
+
+| Variable | Default | Description |
+|---|---|---|
+| `K8S_HARNESS_IMAGE` | `opencode-sandbox:dev` | Default container image used for sandbox pods when no per-harness image is set. Acts as the fallback for all harness types. |
+| `K8S_HARNESS_IMAGE_OPENCODE` | *(falls back to `K8S_HARNESS_IMAGE`)* | Image for the `opencode` harness. |
+| `K8S_HARNESS_IMAGE_CLAUDE_SDK` | *(falls back to `K8S_HARNESS_IMAGE`)* | Image for the `claude-agent-sdk` harness. |
+| `K8S_HARNESS_IMAGE_CLAUDE_CODE` | *(falls back to `K8S_HARNESS_IMAGE`)* | Image for the `claude-code` TUI harness. |
+| `K8S_HARNESS_IMAGE_CODEX` | *(falls back to `K8S_HARNESS_IMAGE`)* | Image for the `codex` TUI harness. |
+
+### Cluster settings
+
+| Variable | Default | Description |
+|---|---|---|
+| `K8S_NAMESPACE` | `default` | Kubernetes namespace where Sandbox custom resources and their NodePort Services are created. |
+| `K8S_IMAGE_PULL_POLICY` | `Never` | Image pull policy applied to every sandbox pod. Use `Never` for locally-loaded images in a kind cluster. Use `IfNotPresent` or `Always` for registry-backed images in production. |
+
+<Warning>
+`K8S_IMAGE_PULL_POLICY=Never` is correct for local kind development, where images are loaded directly into the cluster. In any production or staging environment backed by a container registry, set this to `IfNotPresent` or `Always` — otherwise pods will fail to start with `ErrImageNeverPull`.
+</Warning>
+
+## Warm pool
+
+The warm pool pre-provisions sandbox pods before any session is requested. When a session is created and a warm pod is available, startup time drops from ~10–12 s (cold) to ~1.8 s (warm).
+
+| Variable | Default | Description |
+|---|---|---|
+| `WARM_POOL_SIZE` | `2` | Target number of pre-provisioned warm pods across all recently-active agents. Set to `0` to disable the warm pool entirely. |
+| `WARM_POOL_TTL_MINUTES` | `30` | Warm pods older than this are recycled and replaced. Keeps pods from drifting out of sync with harness image updates. |
+| `WARM_POOL_MAX_PROVISIONING` | `2` | Maximum number of pods the top-up loop provisions concurrently. Increase this if you have a large `WARM_POOL_SIZE` and want faster fill-up after a cluster restart. |
+| `WARM_POOL_RECENT_AGENT_HOURS` | `24` | The warm pool only maintains pods for agents that have had a session in the last N hours. Agents idle longer than this are excluded, so warm capacity is not wasted on dormant agents. |
+
+## Passthrough environment variables
+
+Any environment variable on the platform process whose name starts with `CONTAINER_ENV_` is injected into every sandbox container, with the prefix stripped.
+
+```bash
+# Set on the platform process:
+CONTAINER_ENV_GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+
+# The sandbox container sees:
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+```
+
+Use this mechanism to inject credentials your agents need at runtime, such as `GITHUB_TOKEN`, `NPM_TOKEN`, or any other tool-specific key.
+
+<Warning>
+Passthrough variables are injected as plain environment variables — the agent process can read them directly with `echo $VAR`. Do not use `CONTAINER_ENV_` to pass secrets that must be vault-proxied (such as `LITELLM_API_KEY`). Vault-proxied secrets require separate configuration so that agents only ever see stub values, not the real keys.
+</Warning>
+
+## Integrations
+
+| Variable | Description |
+|---|---|
+| `BASE_URL` | Public HTTPS URL of your LAP deployment (e.g. `https://lap.acme.dev`). Used to construct OAuth redirect URIs and webhook callback URLs. Defaults to `http://localhost:3000` in development. On Render, this is auto-populated from `RENDER_EXTERNAL_URL` if left unset. |
+| `ENCRYPTION_KEY` | Base64-encoded 32-byte key used to encrypt OAuth access tokens and refresh tokens at rest in the database. **Required in production.** If unset, tokens are stored as plaintext and the platform logs a warning. Generate a key with: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
+
+### Linear
+
+Leaving any of the three Linear variables unset disables the integration entirely — its routes return 404 instead of registering.
+
+| Variable | Description |
+|---|---|
+| `LINEAR_CLIENT_ID` | Client ID from your Linear OAuth application. Create one at [linear.app/settings/api/applications/new](https://linear.app/settings/api/applications/new). Set the redirect URL to `${BASE_URL}/api/integrations/oauth/linear/callback`. |
+| `LINEAR_CLIENT_SECRET` | Client secret from the same Linear OAuth application. |
+| `LINEAR_WEBHOOK_SECRET` | Webhook secret from Linear. Set the webhook URL to `${BASE_URL}/api/integrations/webhooks/linear` and enable the "Agent session events" webhook category in the Linear dashboard. |

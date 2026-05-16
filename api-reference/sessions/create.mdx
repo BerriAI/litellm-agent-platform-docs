@@ -1,0 +1,120 @@
+---
+title: "POST /api/v1/managed_agents/agents/{agent_id}/session"
+description: "Creates a session and starts a sandbox pod for the specified agent. Returns immediately with status 'creating'. Poll until 'ready' before sending messages."
+---
+
+Creates a new session for the specified agent. The platform starts a sandbox pod in the background and returns a `creating` session row immediately — you do not need to wait for the pod to be ready before the response comes back.
+
+Poll `GET /api/v1/managed_agents/sessions/{session_id}` until `status` is `ready` before sending messages. With a warm pool, this typically takes under two seconds. Cold starts (no warm slot available, or a request with per-session `env_vars`) take around 10 seconds on Kubernetes.
+
+## Request
+
+```
+POST /api/v1/managed_agents/agents/{agent_id}/session
+```
+
+**Headers**
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <MASTER_KEY>` |
+| `Content-Type` | `application/json` |
+
+## Path parameters
+
+<ParamField path="agent_id" type="string" required>
+  The unique ID of the agent to create a session for.
+</ParamField>
+
+## Body parameters
+
+<ParamField body="title" type="string">
+  Human-readable label for the session. Shown in the web UI session list.
+</ParamField>
+
+<ParamField body="initial_prompt" type="string">
+  Message sent to the agent immediately after the sandbox is ready. The agent processes this in the background — the session flips to `ready` as soon as the harness handshake completes, without waiting for the agent to finish the task. The reply is stored in `response` on the session row and can be read with `GET /sessions/{id}`.
+
+  Omit this field to bring up the sandbox without sending anything.
+</ParamField>
+
+<ParamField body="env_vars" type="object">
+  Per-session environment variables injected into the harness container at launch time. Use for short-lived secrets such as `GITHUB_TOKEN` or `CIRCLECI_TOKEN`.
+
+  These values are **never persisted** to the database and **never logged** by value.
+
+  Constraints:
+  - Key names must match `^[A-Za-z_][A-Za-z0-9_]*$`
+  - Maximum 50 keys
+  - Total JSON-encoded size must be ≤ 16 KB
+  - The following keys are reserved and cause a `400` if used: `REPO_URL`, `BRANCH`, `LITELLM_API_KEY`, `LITELLM_API_BASE`, `LITELLM_DEFAULT_MODEL`, `AGENT_PROMPT`, `PORT`, `GIT_TOKEN`, `AGENT_REQUIREMENTS`
+
+  <Note>
+    Sessions with `env_vars` are always cold-started and cannot be served from the warm pool, because warm tasks are provisioned without session-specific secrets.
+  </Note>
+</ParamField>
+
+## Response
+
+Returns the newly created `ApiSession` object with `status: "creating"`. See [Get session](/api-reference/sessions/get) for the full field reference.
+
+## Full workflow example
+
+The example below creates a session, polls until ready, and then sends a message.
+
+<RequestExample>
+
+```bash Create session
+curl -X POST "https://<your-platform-host>/api/v1/managed_agents/agents/agt_01j9xyz/session" \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "review PR #1234",
+    "env_vars": {
+      "GITHUB_TOKEN": "ghp_...",
+      "CIRCLECI_TOKEN": "cci_..."
+    }
+  }'
+```
+
+```bash Poll until ready
+# Poll every 3 seconds until status = ready
+SID="<session_id from create response>"
+
+until [ "$(curl -s "https://<your-platform-host>/api/v1/managed_agents/sessions/$SID" \
+  -H "Authorization: Bearer $MASTER_KEY" | jq -r '.status')" = "ready" ]; do
+  sleep 3
+done
+```
+
+```bash Send message
+curl -X POST "https://<your-platform-host>/api/v1/managed_agents/sessions/$SID/message" \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Review the latest open PR and summarize the changes."}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200
+{
+  "id": "ses_01kabc",
+  "agent_id": "agt_01j9xyz",
+  "status": "creating",
+  "phase": "creating_sandbox",
+  "phase_detail": null,
+  "sandbox_url": null,
+  "tty_url": null,
+  "tty_token": null,
+  "response": null,
+  "task_arn": null,
+  "created_at": "2025-05-01T12:01:00.000Z",
+  "last_seen_at": null,
+  "idle_timeout_ms": 86400000,
+  "failure_reason": null
+}
+```
+
+</ResponseExample>

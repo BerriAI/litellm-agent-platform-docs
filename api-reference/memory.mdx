@@ -1,0 +1,228 @@
+---
+title: "Memory API: store persistent context across agent sessions"
+description: "Create and manage per-agent memory entries. Memories are injected into context at session start and tracked with usage statistics across runs."
+---
+
+Memories are per-agent text snippets injected into the agent's context at session start. They are intended for facts, preferences, and instructions that the agent should remember across sessions — for example, a user's coding style or a recurring project convention.
+
+Memories can be searched with a keyword query (`?q=`) or filtered by tag (`?tag=`). When the harness's `search_memory` tool calls `GET /memory?q=...`, the platform automatically bumps `times_applied` and `last_applied_at` on the returned rows so you can track which memories are actually being used.
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/managed_agents/agents/{agent_id}/memory` | List memories |
+| `POST` | `/api/v1/managed_agents/agents/{agent_id}/memory` | Create a memory |
+| `PATCH` | `/api/v1/managed_agents/agents/{agent_id}/memory/{memory_id}` | Update a memory |
+| `DELETE` | `/api/v1/managed_agents/agents/{agent_id}/memory/{memory_id}` | Delete a memory |
+
+---
+
+## List memories
+
+```
+GET /api/v1/managed_agents/agents/{agent_id}/memory
+```
+
+Returns all memories for the agent. Use query parameters to narrow results.
+
+**Query parameters**
+
+<ParamField query="q" type="string">
+  Case-insensitive substring search against memory `text`. When provided, only memories whose text contains this string are returned.
+</ParamField>
+
+<ParamField query="tag" type="string">
+  Filter to memories whose `tags` array includes this exact tag value.
+</ParamField>
+
+Both `q` and `tag` can be combined — results must satisfy both conditions.
+
+Returns an array of `ApiMemory` objects.
+
+---
+
+## Create a memory
+
+```
+POST /api/v1/managed_agents/agents/{agent_id}/memory
+```
+
+### Body parameters
+
+<ParamField body="text" type="string" required>
+  The memory content to store. Must be at least one character.
+</ParamField>
+
+<ParamField body="tags" type="string[]">
+  Up to 8 tags for categorizing and filtering this memory.
+</ParamField>
+
+<ParamField body="type" type="string">
+  Optional free-form type label, e.g. `preference`, `fact`, `instruction`.
+</ParamField>
+
+<ParamField body="priority" type="number">
+  Integer priority used to order memories when multiple are injected. Higher values are injected first.
+</ParamField>
+
+<ParamField body="source" type="string">
+  Origin of the memory. One of: `agent`, `slack`, `ui`. Defaults to `ui` when called from the API. The harness sets `agent`; integrations like Slack set `slack`.
+</ParamField>
+
+Returns the new `ApiMemory` object.
+
+---
+
+## Update a memory
+
+```
+PATCH /api/v1/managed_agents/agents/{agent_id}/memory/{memory_id}
+```
+
+All fields are optional. Only fields you include are updated.
+
+<ParamField body="text" type="string">
+  New memory content.
+</ParamField>
+
+<ParamField body="tags" type="string[]">
+  New tag list. Replaces the existing tags.
+</ParamField>
+
+<ParamField body="type" type="string">
+  New type label.
+</ParamField>
+
+<ParamField body="priority" type="number">
+  New priority integer.
+</ParamField>
+
+<ParamField body="disabled" type="boolean">
+  Set to `true` to suppress this memory without deleting it. A disabled memory is excluded from context injection and `search_memory` results but remains in the database for audit purposes.
+</ParamField>
+
+Returns the updated `ApiMemory` object.
+
+---
+
+## Delete a memory
+
+```
+DELETE /api/v1/managed_agents/agents/{agent_id}/memory/{memory_id}
+```
+
+Hard-deletes the memory row. Consider disabling (`disabled: true`) instead of deleting if you may want to restore the memory later.
+
+Returns `204 No Content`.
+
+---
+
+## ApiMemory response fields
+
+<ResponseField name="id" type="string">
+  Unique memory ID.
+</ResponseField>
+
+<ResponseField name="agent_id" type="string">
+  ID of the agent this memory belongs to.
+</ResponseField>
+
+<ResponseField name="text" type="string">
+  The memory content.
+</ResponseField>
+
+<ResponseField name="tags" type="string[]">
+  List of tag strings.
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Type label.
+</ResponseField>
+
+<ResponseField name="priority" type="number">
+  Injection priority. Higher values are injected first.
+</ResponseField>
+
+<ResponseField name="disabled" type="boolean">
+  When `true`, this memory is suppressed from context injection and search without being deleted.
+</ResponseField>
+
+<ResponseField name="times_applied" type="number">
+  Number of times this memory has been returned by a `GET /memory?q=` search (i.e. how often the harness's `search_memory` tool has fetched it).
+</ResponseField>
+
+<ResponseField name="last_applied_at" type="string | null">
+  ISO 8601 timestamp of the last time this memory was returned in a search. `null` if never searched.
+</ResponseField>
+
+<ResponseField name="source" type="string">
+  Origin of the memory: `agent`, `slack`, or `ui`.
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 creation timestamp.
+</ResponseField>
+
+---
+
+## Example: create and list memories
+
+<RequestExample>
+
+```bash Create memory
+curl -X POST "https://<your-platform-host>/api/v1/managed_agents/agents/agt_01j9xyz/memory" \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Always use TypeScript strict mode in this project.",
+    "tags": ["typescript", "style"],
+    "type": "instruction",
+    "priority": 10
+  }'
+```
+
+```bash List memories
+curl "https://<your-platform-host>/api/v1/managed_agents/agents/agt_01j9xyz/memory?tag=typescript" \
+  -H "Authorization: Bearer $MASTER_KEY"
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Create memory (200)
+{
+  "id": "mem_01n5xyz",
+  "agent_id": "agt_01j9xyz",
+  "text": "Always use TypeScript strict mode in this project.",
+  "tags": ["typescript", "style"],
+  "type": "instruction",
+  "priority": 10,
+  "disabled": false,
+  "times_applied": 0,
+  "last_applied_at": null,
+  "source": "ui",
+  "created_at": "2025-05-01T13:00:00.000Z"
+}
+```
+
+```json List memories (200)
+[
+  {
+    "id": "mem_01n5xyz",
+    "agent_id": "agt_01j9xyz",
+    "text": "Always use TypeScript strict mode in this project.",
+    "tags": ["typescript", "style"],
+    "type": "instruction",
+    "priority": 10,
+    "disabled": false,
+    "times_applied": 3,
+    "last_applied_at": "2025-05-01T14:30:00.000Z",
+    "source": "ui",
+    "created_at": "2025-05-01T13:00:00.000Z"
+  }
+]
+```
+
+</ResponseExample>

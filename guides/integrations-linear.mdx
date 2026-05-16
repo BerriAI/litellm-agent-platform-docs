@@ -1,0 +1,150 @@
+---
+title: "Connect Linear to LiteLLM Agent Platform"
+description: "Set up the Linear OAuth integration so assigning a Linear issue to your LAP agent automatically spawns a new sandbox session to work on it."
+---
+
+The Linear integration lets you delegate issues to a LAP agent directly from the Linear UI. When you assign an issue to the configured agent app, Linear fires a webhook, the platform spawns a sandbox session, and the agent picks up the issue automatically. The round trip from delegation to the first "Picking up…" activity appearing on the issue takes roughly 1.5 seconds.
+
+## Prerequisites
+
+- A Linear workspace where you have admin access
+- A publicly reachable HTTPS URL for your LAP deployment (`BASE_URL`)
+- For local development: an [ngrok](https://ngrok.com) or [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) tunnel to expose `localhost`
+
+## Step 1: Create the OAuth app in Linear
+
+Go to **Linear → Settings → API → Applications → Create new** and fill in the following fields:
+
+| Field | Value |
+|---|---|
+| Name | `LAP agent` (or any name you prefer) |
+| Developer URL | `<BASE_URL>` |
+| Callback URLs | `<BASE_URL>/api/integrations/oauth/linear/callback` |
+| Webhook URL | `<BASE_URL>/api/integrations/webhooks/linear` |
+| Webhook events | **Agent session events** (required) |
+
+Save the application, then copy the three values you'll need in the next step:
+
+- **Client ID**
+- **Client secret**
+- **Webhook signing secret**
+
+The integration automatically requests the required OAuth scopes (`read`, `write`, `app:assignable`, `app:mentionable`) — no manual scope configuration is needed.
+
+## Step 2: Set the environment variables
+
+Add the following to your `.env` file (or your deployment's secret store) and restart the platform:
+
+```bash
+# Public URL of your LAP deployment — used for the OAuth redirect_uri
+# and webhook URL construction.
+BASE_URL=https://your-lap-deployment
+
+# AES-256 key for encrypting OAuth tokens at rest. Required in production.
+# Generate once:
+# node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+ENCRYPTION_KEY=<base64-encoded-32-bytes>
+
+# From the Linear OAuth app you created in step 1
+LINEAR_CLIENT_ID=<your-client-id>
+LINEAR_CLIENT_SECRET=<your-client-secret>
+LINEAR_WEBHOOK_SECRET=<your-webhook-signing-secret>
+```
+
+If any of the three `LINEAR_*` variables is missing, the integration stays disabled and its routes return `404`. The rest of the platform is unaffected.
+
+## Step 3: Install into your Linear workspace
+
+Visit the authorize endpoint from a browser that is signed into the LAP dashboard:
+
+```
+GET <BASE_URL>/api/integrations/oauth/linear/authorize
+Authorization: Bearer <MASTER_KEY>
+```
+
+The endpoint redirects to `linear.app/oauth/authorize`. Sign in if prompted, then click **Authorize**. After the OAuth exchange completes, you land on a "Linear connected for \<workspace\>" confirmation page and the integration is recorded in the platform.
+
+## Step 4: Bind an agent to the install
+
+After the OAuth flow completes, you need to bind a specific LAP agent to receive delegated issues. This tells the platform which agent to use when Linear fires a webhook for your workspace.
+
+<Note>
+  The web UI for managing agent bindings is not yet available. Contact your platform administrator to create the binding via the platform's admin interface or API.
+</Note>
+
+Once a binding exists, the bound agent appears in Linear's **Delegate** picker on every issue in the workspace.
+
+## How it works at runtime
+
+<Steps>
+  <Step title="Issue assigned in Linear">
+    A user opens an issue in Linear and delegates it to the LAP agent app.
+  </Step>
+  <Step title="Linear fires the webhook">
+    Linear sends an `AgentSessionEvent` webhook to `<BASE_URL>/api/integrations/webhooks/linear`. The platform verifies the HMAC-SHA256 signature against `LINEAR_WEBHOOK_SECRET`.
+  </Step>
+  <Step title="Platform spawns a session">
+    The platform looks up the integration install, finds the bound agent, and calls `POST /api/v1/managed_agents/agents/{id}/session`.
+  </Step>
+  <Step title="Agent picks up the issue">
+    The harness starts, the issue is injected into the system prompt, and the first `agentActivityCreate` thought (`Picking up <issue-id>.`) appears in Linear's activity panel.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `404` on `/api/integrations/webhooks/linear` | A `LINEAR_*` env var is missing | Set all three and restart the platform |
+| `401 bad signature` on the webhook | `LINEAR_WEBHOOK_SECRET` does not match | Re-copy the signing secret from the Linear app settings page |
+| `404 install not found` on the webhook | OAuth install never completed | Re-run step 3 |
+| `404 no agent bound to this install` | No agent binding exists for this workspace | Set up the agent binding per step 4 |
+| `204` on the webhook (silent, no activity) | The event was an `AppUserNotification`, not an `AgentSessionEvent` | Expected for non-delegation events; no action needed |
+| Thought activity never appears in Linear UI | Stale OAuth token or missing scope | Uninstall the app from Linear (Settings → Applications), then redo steps 3–4 |
+| OAuth callback returns "already installed" | App was previously installed in the workspace | Uninstall from Linear → Settings → Applications, then redo step 3 |
+
+## Local development
+
+Use a tunnel to expose your local server to Linear's edge:
+
+```bash
+ngrok http 3000
+export BASE_URL=https://<your-subdomain>.ngrok-free.dev
+```
+
+Update the Linear app's **Callback URL** and **Webhook URL** to use the new `BASE_URL`, put the three secrets into `.env`, and restart:
+
+```bash
+npm run dev
+```
+
+To replay a captured webhook from the ngrok inspector without re-delegating in Linear:
+
+```python
+import json, urllib.request, base64
+
+with urllib.request.urlopen("http://localhost:4040/api/requests/http?limit=10") as r:
+    d = json.load(r)
+
+rec = next(x for x in d["requests"]
+           if "/webhooks/linear" in x["request"]["uri"]
+           and "AgentSessionEvent" in str(x["request"]["headers"].get("Linear-Event", "")))
+
+req = rec["request"]
+body = base64.b64decode(req["raw"]).decode().split("\r\n\r\n", 1)[1]
+
+def H(k):
+    v = req["headers"].get(k, "")
+    return v[0] if isinstance(v, list) else v
+
+r2 = urllib.request.Request(
+    "http://localhost:3000/api/integrations/webhooks/linear",
+    method="POST", data=body.encode(),
+    headers={
+        "content-type": "application/json",
+        "linear-signature": H("Linear-Signature"),
+        "linear-event": H("Linear-Event"),
+    })
+
+print(urllib.request.urlopen(r2).status)
+```

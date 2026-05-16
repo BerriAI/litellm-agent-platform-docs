@@ -1,0 +1,97 @@
+---
+title: "Harness types: Claude Code, Codex, opencode, and more"
+description: "A harness is the container image and runtime inside a sandbox. Pick an API harness for automation or a TUI harness for interactive terminal access."
+---
+
+A harness is the container image and runtime that the platform launches inside a sandbox pod. It is the process that actually runs the coding agent — Claude Code, Codex, opencode, or the Claude Agent SDK. The harness handles cloning the repository, installing dependencies, loading the system prompt, and either exposing a JSON message API or a PTY over WebSocket depending on the harness type.
+
+You select a harness when you create an agent via the `harness_id` field. The choice is permanent for the life of the agent; to switch harnesses, create a new agent.
+
+## Harness comparison
+
+| Harness | `harness_id` | Interface | `supports_tui` | Best for |
+|---|---|---|---|---|
+| opencode | `opencode` | JSON message API | `false` | Programmatic automation, CI/CD pipelines |
+| Claude Agent SDK | `claude-agent-sdk` | JSON message API | `false` | Programmatic automation using Anthropic's agent SDK |
+| Claude Code | `claude-code` | PTY over WebSocket | `true` | Interactive terminal use with the `lap` CLI or browser |
+| Codex | `codex` | PTY over WebSocket | `true` | Interactive terminal use with the `lap` CLI or browser |
+
+## API harnesses
+
+API harnesses expose the platform's JSON message protocol. You interact with them by posting messages to `POST /sessions/{id}/message` and reading the structured response. There is no terminal involved — the harness runs headlessly and returns a `HarnessMessageResponse` blob for every message.
+
+### opencode
+
+`harness_id: "opencode"` is the default harness. It runs the opencode agent in API mode and communicates over a JSON message protocol. Use it when you want to drive an agent from code — a CI job, a webhook handler, a Slack bot — without attaching a terminal.
+
+```bash
+# Create an agent with the opencode harness (default)
+curl -s https://your-lap-instance/api/v1/managed_agents/agents \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "pr-reviewer",
+    "model": "anthropic/claude-opus-4-7",
+    "harness_id": "opencode",
+    "prompt": "You review pull requests."
+  }'
+```
+
+### claude-agent-sdk
+
+`harness_id: "claude-agent-sdk"` runs the Anthropic Claude Agent SDK inside the sandbox. Like opencode, it is API-driven — sessions accept messages and return structured responses. Use it when you want Anthropic's official agent SDK driving the loop rather than opencode.
+
+## TUI harnesses
+
+TUI harnesses expose a PTY (pseudo-terminal) over a WebSocket at `/tty`. Instead of a JSON message API, you get a live terminal session — the same experience as `ssh` but sandboxed. The `lap` CLI and the browser session view both attach to this WebSocket and stream raw terminal bytes.
+
+The `supports_tui` field on an `ApiAgent` response is `true` for TUI harnesses, which lets the `lap` CLI filter the agent picker to only show harnesses you can attach to.
+
+### claude-code
+
+`harness_id: "claude-code"` runs the real Claude Code CLI under `node-pty`. The working directory is `/work/repo` (cloned from the agent's `repo_url` at boot). The harness accepts a TTY connection and renders the full Claude Code TUI — including ANSI formatting, interactive input, and real-time streaming — over the WebSocket.
+
+```bash
+# Attach a local terminal to a Claude Code session
+lap claude-code-agent-name
+```
+
+### codex
+
+`harness_id: "codex"` runs the Codex CLI under the same PTY-over-WebSocket model. Attach and detach with `lap` the same way as with Claude Code.
+
+## Connecting to a TUI harness
+
+<Steps>
+  <Step title="Create a session">
+    ```bash
+    curl -s https://your-lap-instance/api/v1/managed_agents/agents/$AGENT_ID/session \
+      -H "Authorization: Bearer $MASTER_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{}'
+    ```
+  </Step>
+  <Step title="Wait for status=ready">
+    Poll `GET /sessions/{id}` until `status` is `ready`. The `tty_url` and `tty_token` fields are populated at this point.
+  </Step>
+  <Step title="Connect over WebSocket">
+    Use `lap <agent-name>` for a one-command experience, or connect directly to `ws://<sandbox>/tty?token=<tty_token>`. `lap` handles polling and attachment automatically.
+  </Step>
+</Steps>
+
+The `tty_token` must be sent as a bearer token on the WebSocket upgrade handshake. `lap` sends it as an `Authorization: Bearer <token>` header, which keeps the token out of proxy access logs that record the request URL.
+
+## Choosing a harness
+
+<CardGroup cols={2}>
+  <Card title="Use an API harness" icon="code">
+    Choose `opencode` or `claude-agent-sdk` when you are driving the agent programmatically — from a CI pipeline, a webhook, a Slack integration, or any other automated system that sends tasks and reads structured responses.
+  </Card>
+  <Card title="Use a TUI harness" icon="terminal">
+    Choose `claude-code` or `codex` when you want an interactive terminal session. Attach with `lap`, work in the sandbox the same way you would locally, and detach when you are done. The session stays alive.
+  </Card>
+</CardGroup>
+
+<Tip>
+  If you are unsure, start with `opencode`. It is the default, works headlessly, and gives you the most flexibility for programmatic integration. You can always create a second agent with a TUI harness when you need interactive access.
+</Tip>

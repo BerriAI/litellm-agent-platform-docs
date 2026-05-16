@@ -1,0 +1,83 @@
+---
+title: "Speed up session starts with the warm pool"
+description: "Keep pre-provisioned sandbox pods ready to claim so that session start time drops from ~10 seconds to under 2 seconds for recently active agents."
+---
+
+The warm pool keeps a set of sandbox pods pre-provisioned and waiting to be claimed by an incoming session. Instead of spinning up a new pod on demand — which takes 10–12 seconds — the platform assigns a warm pod to the session immediately, bringing start time down to roughly 1.8 seconds.
+
+The worker process tops up the pool automatically for agents that have been active recently, so the pods are ready before users ask for them.
+
+## How it works
+
+When a session is created for an agent that has warm pods available, the platform claims one of those pods and transitions it directly to `ready`. The worker then notices the pool is below the target size and provisions a replacement in the background. This keeps the pool full for the next request.
+
+Warm pods that are not claimed within `WARM_POOL_TTL_MINUTES` are recycled and replaced with fresh ones, ensuring pods don't sit idle indefinitely with stale state.
+
+## Configuration
+
+Set these environment variables in your `.env` file or deployment secret store:
+
+| Variable | Default | Description |
+|---|---|---|
+| `WARM_POOL_SIZE` | `2` | Target number of warm pods to keep ready across all eligible agents. Set to `0` to disable the warm pool entirely. |
+| `WARM_POOL_MAX_PROVISIONING` | `2` | Maximum number of pods that can be provisioning concurrently during a top-up cycle. Limits burst load on the cluster. |
+| `WARM_POOL_TTL_MINUTES` | `30` | Recycle warm pods older than this many minutes. |
+| `WARM_POOL_RECENT_AGENT_HOURS` | `24` | Only provision warm pods for agents that have had a session in the last N hours. Agents inactive longer than this are ignored until they receive a new session. |
+
+### Example configuration
+
+```bash
+# Keep 3 warm pods ready, recycle after 45 minutes,
+# limit to agents active in the last 12 hours.
+WARM_POOL_SIZE=3
+WARM_POOL_MAX_PROVISIONING=2
+WARM_POOL_TTL_MINUTES=45
+WARM_POOL_RECENT_AGENT_HOURS=12
+```
+
+### Disabling the warm pool
+
+```bash
+WARM_POOL_SIZE=0
+```
+
+With `WARM_POOL_SIZE=0`, every session start is a cold start. Use this when you want to minimize background cluster activity or are running in a resource-constrained environment.
+
+## Performance numbers
+
+| Start type | Typical duration |
+|---|---|
+| Cold start (new pod) | ~10–12 seconds |
+| Warm start (pre-provisioned pod) | ~1.8 seconds |
+
+## Sizing for your team
+
+The right `WARM_POOL_SIZE` depends on how many concurrent sessions your team typically opens:
+
+<CardGroup cols={2}>
+  <Card title="Small team (1–3 concurrent users)" icon="users">
+    The default `WARM_POOL_SIZE=2` is usually sufficient. Each session claim triggers an immediate top-up, so a second user opening a session within a few seconds of the first may briefly see a cold start.
+  </Card>
+  <Card title="Larger team or CI workloads" icon="building">
+    Set `WARM_POOL_SIZE` to match your peak concurrency. If 6 engineers open sessions at standup time, set `WARM_POOL_SIZE=6`. Pair with a higher `WARM_POOL_MAX_PROVISIONING` (e.g. `4`) to top up faster.
+  </Card>
+</CardGroup>
+
+<Tip>
+  Check current warm pool counts at any time via the admin stats endpoint:
+
+  ```bash
+  curl https://your-lap-deployment/api/v1/admin/stats \
+    -H "Authorization: Bearer $MASTER_KEY"
+  ```
+
+  The response includes `warm_pool.counts` (provisioning, warm, claimed, dead) and a per-agent breakdown under `warm_pool.by_agent`.
+</Tip>
+
+## Eligibility
+
+Warm pods are only provisioned for agents that have had at least one session in the last `WARM_POOL_RECENT_AGENT_HOURS` hours. An agent that hasn't been used in that window is considered inactive and excluded from the pool until it receives a new session. After the first session on an inactive agent, the worker will begin topping up its pool at the next reconcile cycle.
+
+<Note>
+  If a session start for an active agent is unexpectedly slow, check the admin stats for `warm_pool_empty_for_agent` in the `detected_issues` array of the session diagnose endpoint (`GET /api/v1/managed_agents/sessions/{session_id}/diagnose`).
+</Note>

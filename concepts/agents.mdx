@@ -1,0 +1,107 @@
+---
+title: "What is an agent in LiteLLM Agent Platform?"
+description: "An agent is the persistent configuration for a coding assistant: model, system prompt, harness type, repo, env vars, and attached skills."
+---
+
+An agent is the reusable blueprint for a coding assistant. It stores everything the platform needs to boot a sandbox: which model to call, what system prompt to use, which harness to run, what Git repository to clone, and which environment variables to inject. You create an agent once and open as many sessions against it as you need — each session is a fresh, isolated sandbox pod that inherits the agent's configuration.
+
+## Agent fields
+
+The API returns agents as `ApiAgent` objects. The table below describes every field.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique agent identifier (UUID). |
+| `name` | `string \| null` | Human-readable label. The `lap` CLI resolves agents by this name. |
+| `model` | `string` | LiteLLM model string passed to every session (e.g. `anthropic/claude-opus-4-7`). |
+| `prompt` | `string \| null` | System prompt prepended to every conversation. Skill blocks are appended here. |
+| `harness_id` | `string` | Which runtime container to use. One of `opencode`, `claude-agent-sdk`, `claude-code`, or `codex`. |
+| `supports_tui` | `boolean` | `true` for TUI harnesses (`claude-code`, `codex`) that expose a PTY over WebSocket. |
+| `repo_url` | `string \| null` | Git repository the sandbox clones at boot. |
+| `branch` | `string` | Branch to check out. Defaults to `main`. |
+| `mcp_servers` | `string[]` | MCP server URLs available to the agent inside the sandbox. |
+| `env_vars` | `Record<string, string>` | Agent-level environment variables persisted in the database (encrypted at rest). |
+| `attached_skill_ids` | `string[]` | IDs of skills appended to the system prompt, in attach order. |
+| `allow_out` | `string[]` | Allowlist of outbound domains the sandbox vault proxy permits. |
+| `deny_out` | `string[]` | Denylist of outbound domains the sandbox vault proxy blocks. |
+| `sandbox_files` | `SandboxFileSpec[]` | Files written into every sandbox at session start. |
+| `created_at` | `string` | ISO 8601 creation timestamp. |
+
+## Creating an agent
+
+```bash
+curl -s https://your-lap-instance/api/v1/managed_agents/agents \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "code-reviewer",
+    "model": "anthropic/claude-opus-4-7",
+    "prompt": "You review pull requests and leave concise, actionable feedback.",
+    "harness_id": "opencode",
+    "repo_url": "https://github.com/your-org/your-repo",
+    "branch": "main"
+  }'
+```
+
+Save the `id` field from the response — you need it to create sessions.
+
+## Harness types
+
+The `harness_id` field selects the container image and runtime that runs inside the sandbox. See [Harness types](/concepts/harnesses) for a full comparison. In brief:
+
+- **`opencode`** and **`claude-agent-sdk`** are API-driven harnesses. You interact with them by sending messages to the REST API.
+- **`claude-code`** and **`codex`** are TUI harnesses. They expose a PTY over WebSocket, which the `lap` CLI or a browser terminal can attach to.
+
+## Agent-level vs per-session env vars
+
+There are two places to set environment variables for an agent's sandboxes.
+
+<CardGroup cols={2}>
+  <Card title="Agent-level env_vars" icon="database">
+    Persisted to the database (encrypted at rest). Injected into **every** session the agent creates. Use these for long-lived credentials the agent always needs — for example a `GITHUB_TOKEN` that authorizes the agent to push branches or open pull requests.
+  </Card>
+  <Card title="Per-session env_vars" icon="clock">
+    Passed at session-create time. **Never persisted**, never logged by value. Injected once into the sandbox pod and discarded after launch. Use these for short-lived or per-user secrets such as a CI token scoped to a single run.
+  </Card>
+</CardGroup>
+
+Both accept a `Record<string, string>` with a maximum of 50 keys and a combined JSON-encoded size of 16 KB. Per-session values take precedence over agent-level values when the same key appears in both.
+
+<Note>
+  Credentials you set in agent-level `env_vars` flow through the vault proxy. The agent sees stub values (e.g. `GITHUB_TOKEN=stub_github_a8f1`); the vault swaps them for real values on every outbound TLS connection. See [Credential vault](/concepts/vault) for details.
+</Note>
+
+### Reserved keys
+
+The following keys are managed by the platform and cannot appear in `env_vars`. The API returns `400` if you include any of them.
+
+```
+REPO_URL  BRANCH  LITELLM_API_KEY  LITELLM_API_BASE
+LITELLM_DEFAULT_MODEL  AGENT_PROMPT  PORT  GIT_TOKEN  AGENT_REQUIREMENTS
+```
+
+`GIT_TOKEN` is reserved because the sandbox entrypoint uses it for clone-and-wipe: it is erased from the environment immediately after `git clone` so the agent cannot read it back. If you need a token that survives into the agent shell (for example to run `gh pr create`), pass it as `GITHUB_TOKEN` or `GH_TOKEN` instead.
+
+## Skills attached to agents
+
+A skill is a reusable block of instructions you write once and attach to any number of agents. Each attached skill is appended as a `<!-- skill:<id> -->` block in the agent's system prompt and materialized as a file inside every sandbox at boot.
+
+Attach skills at agent-create time with `skill_ids`:
+
+```json
+{
+  "name": "my-agent",
+  "model": "anthropic/claude-opus-4-7",
+  "skill_ids": ["skill_abc123", "skill_def456"]
+}
+```
+
+The `attached_skill_ids` field on the `ApiAgent` response reflects the currently attached skills in attach order.
+
+## Sessions over an agent's lifetime
+
+An agent is a long-lived configuration object. It does not consume any compute by itself. When you need work done, you create a session — a live sandbox pod scoped to that agent. The pod boots, clones the configured repository, loads the system prompt, and waits for messages. When the session ends (after 24 hours of inactivity, or when you delete it), the pod is torn down and resources are released. The agent persists unchanged, ready for the next session.
+
+<Tip>
+  Use the warm pool to pre-provision sandbox pods for your most active agents. The platform claims a warm pod for a new session instead of booting a cold one, reducing session start time from ~10 seconds to under 2 seconds.
+</Tip>

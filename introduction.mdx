@@ -1,0 +1,18 @@
+---
+title: "LiteLLM Agent Platform"
+description: "Self-hosted infrastructure for running coding agents in isolated sandboxes with a credential vault."
+---
+
+LiteLLM Agent Platform is self-hosted infrastructure for running coding agents — Claude Code, Codex, anything — inside isolated sandboxes with a credential vault, so agents can run with bypass-permissions on without ever seeing your real keys.
+
+Use it from the `lap` CLI in your terminal, the web UI, or call the API directly.
+
+## How it works
+
+Every session runs in a fresh Kubernetes pod. The pod's environment contains only stub credentials (e.g. `GITHUB_TOKEN=stub_github_a8f1`); a vault sidecar swaps stubs for real keys at the wire level on every outbound TLS connection. The agent process never holds the real values.
+
+## Get started
+
+1. **[Install](/installation)** — run LAP locally with kind, or deploy to AWS EKS.
+2. **[Run Claude Code](/quickstart/claude-code)** — open your first sandbox from the terminal.
+3. **[Learn how it works](/learn/architecture)** — sandboxes, vault, and the system architecture.

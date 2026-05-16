@@ -4,12 +4,19 @@
   "name": "🚄 LiteLLM Agent Platform",
   "favicon": "https://media.brand.dev/288cc7c4-5cef-4376-950b-bdf0083eedae.png",
   "colors": {
-    "primary": "#94cb04",
-    "light": "#b8e23a",
+    "primary": "#7C3AED",
+    "light": "#A78BFA",
     "dark": "#000000"
   },
   "background": {
-    "decoration": "grid"
+    "decoration": "grid",
+    "color": {
+      "light": "#FFFFFF",
+      "dark": "#0A0A0A"
+    }
+  },
+  "appearance": {
+    "default": "dark"
   },
   "navbar": {
     "primary": {

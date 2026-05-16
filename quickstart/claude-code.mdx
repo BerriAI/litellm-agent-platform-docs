@@ -1,0 +1,34 @@
+---
+title: "Quickstart: Claude Code"
+description: "Open a Kubernetes-sandboxed Claude Code session from your terminal."
+---
+
+The `lap` CLI talks to a running LAP instance. If you haven't deployed one yet, see [Installation](/installation).
+
+## 1. Install the CLI
+
+```bash
+git clone https://github.com/BerriAI/litellm-agent-platform.git
+cd litellm-agent-platform/cli && npm install
+ln -sf "$PWD/bin/lap.mjs" ~/.local/bin/lap
+```
+
+## 2. Point it at your platform
+
+```bash
+lap login
+```
+
+Enter your LAP URL and `MASTER_KEY`.
+
+## 3. Open a sandbox
+
+```bash
+lap claude-code-cli1
+```
+
+That spins up a fresh Kubernetes pod running Claude Code, attaches your local terminal to its TTY over a WebSocket, and drops you straight into the agent.
+
+The pod's env contains only stub credentials. The [vault proxy](/learn/vault-proxy) swaps them for real keys on every outbound TLS connection.
+
+Press **Ctrl-D** to detach — the session stays alive for 24h. Reconnect by running `lap <agent-name>` again.

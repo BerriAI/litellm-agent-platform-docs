@@ -31,51 +31,86 @@ lap
 
 Pick your Gemini agent from the interactive list. `lap` spins up a Kubernetes-sandboxed pod running the [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) in `--yolo` mode, wraps it in a `tmux` session so it survives WS reconnects (`lap --resume <id>` lands you on the same in-progress REPL), and attaches your local terminal to its TTY over a WebSocket.
 
+The harness routes Gemini through your LiteLLM gateway by mapping `LITELLM_API_KEY` → `GEMINI_API_KEY` and `LITELLM_API_BASE` → `GOOGLE_GEMINI_BASE_URL` + `/gemini` at boot — so Gemini talks to your LiteLLM proxy's [Gemini passthrough](https://docs.litellm.ai/docs/pass_through/google_ai_studio), and your proxy fans out to Google with whatever upstream credentials it's configured with.
+
 Press **Ctrl-D** to detach — the session stays alive for 24h.
 
 ---
 
 ## Creating an agent
 
-Unlike the other harnesses, Gemini doesn't speak OpenAI protocol, so it can't transparently route through your LiteLLM gateway as `OPENAI_BASE_URL`. You have two ways to authenticate:
-
-### Option A — Vertex AI service account (recommended)
-
-The cleanest path. Bring a Google Cloud service account JSON, stash it in a private gist, point the agent at it via `repo_url`. The harness clones it into `/work/repo/key.json` and auto-derives the Vertex AI config from the JSON itself — no per-agent env-var wiring needed.
+In the UI choose **gemini** from the Harness picker and pick a Gemini model, or via API:
 
 ```bash
-# 1. Put your SA JSON in a secret gist
-gh gist create --secret /path/to/sa-key.json -d "lap-gemini-sa"
-# → https://gist.github.com/<you>/<gist-id>
-
-# 2. Create the agent pointing at it
 curl -X POST $LAP_URL/api/v1/managed_agents/agents \
   -H "Authorization: Bearer $MASTER_KEY" \
   -H "Content-Type: application/json" \
-  -d '{
-    "name":"my-gemini",
-    "harness_id":"gemini",
-    "model":"gemini/gemini-2.5-flash",
-    "repo_url":"https://gist.github.com/<you>/<gist-id>.git",
-    "branch":"main",
-    "env_vars":{"GITHUB_TOKEN":"<your gh token>"}
-  }'
+  -d '{"name":"my-gemini","harness_id":"gemini","model":"gemini/gemini-2.5-flash"}'
 ```
 
-On boot the entrypoint:
-- Clones the gist to `/work/repo/` (yielding `/work/repo/key.json`)
-- Exports `GOOGLE_APPLICATION_CREDENTIALS=/work/repo/key.json`
-- Exports `GOOGLE_GENAI_USE_VERTEXAI=true`
-- Extracts `project_id` from the JSON into `GOOGLE_CLOUD_PROJECT`
-- Defaults `GOOGLE_CLOUD_LOCATION=us-central1`
-- Sets `GEMINI_CLI_TRUST_WORKSPACE=true` (skips the trust-folder dialog)
-- Unsets `HTTPS_PROXY` (the gemini-cli's bundled `HttpsProxyAgent` constructor throws when proxy env is set; SA-derived OAuth tokens go direct to Google)
+That's it. No env vars to set — the platform's `LITELLM_API_KEY` and `LITELLM_API_BASE` are wired through automatically.
 
-The CLI picks all of this up automatically. The first `lap` attach lands you straight at the chat prompt.
+---
 
-### Option B — BYO Gemini API Key
+## Prerequisite: register a Gemini model on your LiteLLM proxy
 
-If you have an AI Studio key (the `AIzaSy…` shape, mint one at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)), pass it via `env_vars`:
+Unlike `claude-code`, `codex`, and `hermes` (which speak OpenAI's protocol and hit LiteLLM's `/v1/chat/completions`), Gemini CLI speaks Google's native Gemini API. LiteLLM exposes that as a [passthrough route](https://docs.litellm.ai/docs/pass_through/google_ai_studio) at `LITELLM_API_BASE/gemini/v1beta/...` — but the proxy needs at least one `gemini/*` model registered in its `config.yaml` with a real Google API key behind it.
+
+Example `config.yaml` entry:
+
+```yaml
+model_list:
+  - model_name: gemini/gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+  - model_name: gemini/gemini-2.5-pro
+    litellm_params:
+      model: gemini/gemini-2.5-pro
+      api_key: os.environ/GEMINI_API_KEY
+```
+
+The platform's `LITELLM_API_KEY` must also be a virtual key (starts with `sk-`) — not the proxy master key. Mint one with:
+
+```bash
+curl -X POST $LITELLM_PROXY_URL/key/generate \
+  -H "Authorization: Bearer $LITELLM_PROXY_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"models":["gemini/gemini-2.5-flash","gemini/gemini-2.5-pro"]}'
+```
+
+Verify the route is healthy before creating an agent:
+
+```bash
+curl -X POST $LITELLM_API_BASE/gemini/v1beta/models/gemini-2.5-flash:generateContent \
+  -H "x-goog-api-key: $LITELLM_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"contents":[{"parts":[{"text":"say hi"}]}]}'
+```
+
+If you get a `200`, you're done. If you get `"no healthy deployments for this model"`, the Gemini model isn't registered on the proxy yet.
+
+---
+
+## Picking a model
+
+Gemini CLI's auto-default sometimes lands on a preview model your project doesn't have access to. Pin a stable model inside the TUI:
+
+```
+/model gemini-2.5-flash
+```
+
+Models known to work broadly: `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash`.
+
+---
+
+## Advanced: bypass the LiteLLM proxy
+
+If your LiteLLM deployment doesn't have a Gemini model registered and you need to get up and running fast, you can bring your own Google credentials. The harness detects either and uses it instead of the LiteLLM passthrough.
+
+### Option A — Bring a Gemini API Key
+
+Mint one at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) and pass it as an agent env var:
 
 ```bash
 curl -X POST $LAP_URL/api/v1/managed_agents/agents \
@@ -89,25 +124,36 @@ curl -X POST $LAP_URL/api/v1/managed_agents/agents \
   }'
 ```
 
-The vault sidecar mints a stub for the key, the gemini-cli sends the stub on the wire, and the vault MITM swaps it back for the real value before the request reaches `generativelanguage.googleapis.com`. The agent process never sees the plaintext key.
+The [vault sidecar](/learn/vault-proxy) mints a stub for the key — the agent process only ever sees `stub_…`, and vault swaps for the real value at the wire.
 
----
+### Option B — Vertex AI service account
 
-## Picking a model
+For Vertex AI access (different model catalog, no rate-limit surprises from AI Studio quotas), put your SA JSON in a private gist and point the agent at it:
 
-Gemini CLI auto-selects a model that may not be available on your project (we've seen it default to `gemini-3-flash-preview` and 404 on most Vertex projects). Pass `-m` explicitly inside the TUI if needed:
+```bash
+gh gist create --secret /path/to/sa-key.json -d "lap-gemini-sa"
+# → https://gist.github.com/<you>/<gist-id>
 
+curl -X POST $LAP_URL/api/v1/managed_agents/agents \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name":"my-gemini",
+    "harness_id":"gemini",
+    "model":"gemini/gemini-2.5-flash",
+    "repo_url":"https://gist.github.com/<you>/<gist-id>.git",
+    "branch":"main",
+    "env_vars":{"GITHUB_TOKEN":"<your gh token>"}
+  }'
 ```
-/model gemini-2.5-flash
-```
 
-Models known to work broadly on Vertex AI: `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash`.
+When `/work/repo/key.json` is present after the clone, the entrypoint auto-exports `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT` (extracted from the JSON), `GOOGLE_CLOUD_LOCATION=us-central1`, and `GEMINI_CLI_TRUST_WORKSPACE=true`. The CLI picks it all up automatically.
 
 ---
 
 ## Smoke-testing without the TUI
 
-The entrypoint has an optional non-interactive self-test path. Set `GEMINI_SELFTEST_PROMPT` (any value) in the agent's `env_vars` and the pod runs `gemini -p` once at boot, with the reply landing in `pod_logs_tail.text` on `/api/v1/managed_agents/sessions/<id>/diagnose`. Useful when validating fresh credentials or chasing platform regressions without needing the WebSocket `/tty` flow.
+Set `GEMINI_SELFTEST_PROMPT` (any value) in the agent's `env_vars` and the pod runs `gemini -m gemini-2.5-flash -p "..."` once at boot. The reply lands in pod stdout — readable via the diagnose endpoint without needing the WebSocket `/tty` flow:
 
 ```bash
 curl $LAP_URL/api/v1/managed_agents/sessions/<sid>/diagnose \
@@ -119,3 +165,5 @@ curl $LAP_URL/api/v1/managed_agents/sessions/<sid>/diagnose \
 # hello from gemini cli
 # [selftest-end]
 ```
+
+Useful when verifying fresh credentials end-to-end, or proving the harness works in CI without a browser.

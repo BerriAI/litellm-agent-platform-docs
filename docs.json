@@ -45,7 +45,8 @@
             "pages": [
               "quickstart/claude-code",
               "quickstart/codex",
-              "quickstart/hermes"
+              "quickstart/hermes",
+              "quickstart/gemini"
             ]
           },
           {

@@ -95,12 +95,61 @@ an agent. Then jump to the [Claude Code quickstart](/quickstart/claude-code).
 kind delete cluster --name agent-sbx
 ```
 
-## Production
+## Production (AWS EKS)
 
 Recommended: AWS EKS for the sandbox cluster, Render for web + worker.
 
 - `bin/eks-up.sh` provisions the EKS cluster with the right node groups and the sandbox controller installed.
 - `deploy/render/README.md` includes a Render Blueprint — one click to deploy web + worker.
+
+### Building and pushing harness images
+
+Each sandbox pod runs a harness container image. All harnesses share a common
+base image that must be built first. The canonical reference is the
+[`deploy-eks.yml` CI workflow](https://github.com/BerriAI/litellm-agent-platform/blob/main/.github/workflows/deploy-eks.yml)
+— on every push to `main` it builds and pushes all images automatically.
+
+For your initial setup (or if you're self-hosting without the CI pipeline):
+
+```bash
+REGISTRY=<account-id>.dkr.ecr.<region>.amazonaws.com/litellm-agent-platform
+
+# Authenticate to ECR
+aws ecr get-login-password --region <region> | \
+  docker login --username AWS --password-stdin "$REGISTRY"
+
+# Build the shared base image (local build dep — never pushed to ECR)
+docker build -f harnesses/base/Dockerfile -t harnesses/base:dev .
+
+# Build and push each harness
+for HARNESS in claude-code claude-agent-sdk opencode codex hermes gemini; do
+  IMG="$REGISTRY:harness-${HARNESS}-latest"
+  docker buildx build -f harnesses/${HARNESS}/Dockerfile -t "$IMG" .
+  docker push "$IMG"
+done
+```
+
+After this, store the image URIs in the `litellm-env` Kubernetes secret:
+
+```bash
+REGISTRY=<account-id>.dkr.ecr.<region>.amazonaws.com/litellm-agent-platform
+kubectl patch secret litellm-env -n default --type=json -p="[
+  {\"op\":\"add\",\"path\":\"/data/K8S_HARNESS_IMAGE_CLAUDE_CODE\",  \"value\":\"$(echo -n $REGISTRY:harness-claude-code-latest    | base64 | tr -d '\n')\"},
+  {\"op\":\"add\",\"path\":\"/data/K8S_HARNESS_IMAGE_CLAUDE_SDK\",   \"value\":\"$(echo -n $REGISTRY:harness-claude-agent-sdk-latest | base64 | tr -d '\n')\"},
+  {\"op\":\"add\",\"path\":\"/data/K8S_HARNESS_IMAGE_OPENCODE\",     \"value\":\"$(echo -n $REGISTRY:harness-opencode-latest         | base64 | tr -d '\n')\"},
+  {\"op\":\"add\",\"path\":\"/data/K8S_HARNESS_IMAGE_CODEX\",        \"value\":\"$(echo -n $REGISTRY:harness-codex-latest            | base64 | tr -d '\n')\"},
+  {\"op\":\"add\",\"path\":\"/data/K8S_HARNESS_IMAGE_HERMES\",       \"value\":\"$(echo -n $REGISTRY:harness-hermes-latest           | base64 | tr -d '\n')\"},
+  {\"op\":\"add\",\"path\":\"/data/K8S_HARNESS_IMAGE_GEMINI\",       \"value\":\"$(echo -n $REGISTRY:harness-gemini-latest           | base64 | tr -d '\n')\"}
+]"
+kubectl rollout restart deployment/litellm-web deployment/litellm-worker -n default
+```
+
+<Note>
+  Once the CI pipeline is wired up (GitHub secrets `AWS_ROLE_ARN`,
+  `AWS_ACCOUNT_ID`, `AWS_REGION`, `EKS_CLUSTER_NAME`), every push to `main`
+  rebuilds all harness images and updates the secret automatically. See
+  [`.github/workflows/deploy-eks.yml`](https://github.com/BerriAI/litellm-agent-platform/blob/main/.github/workflows/deploy-eks.yml).
+</Note>
 
 ### Required env vars
 
@@ -112,6 +161,12 @@ Recommended: AWS EKS for the sandbox cluster, Render for web + worker.
 | `LITELLM_API_KEY` | LiteLLM gateway key. |
 | `BASE_URL` | Public URL of the LAP deployment. |
 | `ENCRYPTION_KEY` | Base64-encoded 32-byte key. Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
+| `K8S_HARNESS_IMAGE_CLAUDE_CODE` | ECR URI for `claude-code` harness |
+| `K8S_HARNESS_IMAGE_CLAUDE_SDK` | ECR URI for `claude-agent-sdk` harness |
+| `K8S_HARNESS_IMAGE_OPENCODE` | ECR URI for `opencode` harness |
+| `K8S_HARNESS_IMAGE_CODEX` | ECR URI for `codex` harness |
+| `K8S_HARNESS_IMAGE_HERMES` | ECR URI for `hermes` harness |
+| `K8S_HARNESS_IMAGE_GEMINI` | ECR URI for `gemini` harness |
 
 <Warning>
   Never set `K8S_SKIP_TLS_VERIFY=true` against a production cluster — it disables TLS verification entirely.

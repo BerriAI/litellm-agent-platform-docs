@@ -44,6 +44,7 @@
             "group": "Quickstart",
             "pages": [
               "quickstart/claude-code",
+              "quickstart/claude-agent-sdk",
               "quickstart/codex",
               "quickstart/hermes",
               "quickstart/gemini"

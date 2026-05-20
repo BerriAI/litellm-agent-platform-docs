@@ -1,17 +1,74 @@
 ---
 title: "Installation"
-description: "Run LiteLLM Agent Platform locally on kind, or deploy to AWS EKS for production."
+description: "Run LiteLLM Agent Platform locally (with or without Kubernetes), or deploy to AWS EKS for production."
 ---
 
-Sandboxes run on Kubernetes via the [agent-sandbox CRD](https://github.com/kubernetes-sigs/agent-sandbox). Local dev uses [kind](https://kind.sigs.k8s.io/).
+## Quick local dev (no Kubernetes)
 
-## Prerequisites
+The fastest way to get a running platform is to skip Kubernetes entirely and
+run the harness directly on your laptop. This works for `claude-agent-sdk` and
+`opencode` agents — both use an HTTP JSON API, so no sandbox pod is needed.
 
-- Docker Desktop
-- `kind`, `kubectl`, `helm`
-- A LiteLLM gateway URL and API key
+**Prerequisites:** Node 20+, a Postgres instance, a LiteLLM gateway URL + key.
 
-## Local
+```bash
+git clone https://github.com/BerriAI/litellm-agent-platform.git
+cd litellm-agent-platform
+cp .env.example .env
+```
+
+Add to `.env`:
+
+```dotenv
+DATABASE_URL="postgresql://..."     # direct (non-pooled) connection
+MASTER_KEY=sk-local-dev
+LITELLM_API_BASE="https://gateway.litellm.ai/"
+LITELLM_API_KEY="sk-..."
+ENCRYPTION_KEY=<base64 32-byte key>  # node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+LOCAL_SANDBOX_URL=http://localhost:4096
+WARM_POOL_SIZE=0
+IN_CLUSTER=false
+```
+
+Start the platform and the harness:
+
+```bash
+# Terminal 1 — platform
+npm install && npm run dev          # http://localhost:3000
+
+# Terminal 2 — harness
+cd harnesses/claude-agent-sdk
+npm install && npm run build
+REPO_DIR=/path/to/any/local/repo \
+LITELLM_API_BASE=https://gateway.litellm.ai/ \
+LITELLM_API_KEY=sk-... \
+node dist/server.js                 # http://localhost:4096
+```
+
+Point `lap` at the local instance:
+
+```bash
+lap login   # URL: http://localhost:3000, key: sk-local-dev
+lap my-sdk-agent
+```
+
+Sessions reach `ready` in under 2 seconds. For the full local dev guide
+including Apple Silicon quirks, see
+[CONTRIBUTING.md](https://github.com/BerriAI/litellm-agent-platform/blob/main/CONTRIBUTING.md).
+
+<Note>
+  `LOCAL_SANDBOX_URL` tells the platform to skip K8s and route every session
+  to the local harness. `WARM_POOL_SIZE=0` prevents the reconciler from trying
+  to pre-provision pods.
+</Note>
+
+---
+
+## Local with Kubernetes (kind)
+
+Sandboxes run on Kubernetes via the [agent-sandbox CRD](https://github.com/kubernetes-sigs/agent-sandbox). Use this path for TTY harnesses (`claude-code`, `codex`) or to match production behaviour.
+
+**Prerequisites:** Docker Desktop, `kind`, `kubectl`, `helm`, a LiteLLM gateway URL + key.
 
 ```bash
 git clone https://github.com/BerriAI/litellm-agent-platform.git
@@ -21,9 +78,12 @@ bin/kind-up.sh
 docker compose up
 ```
 
-`bin/kind-up.sh` is idempotent — it provisions a kind cluster `agent-sbx`, installs the sandbox controller, and loads the harness image. `docker compose up` boots Postgres, runs the migration, and starts web (`:3000`) + worker.
+`bin/kind-up.sh` is idempotent — provisions a kind cluster `agent-sbx`,
+installs the sandbox controller, and loads the harness image. `docker compose up`
+boots Postgres, runs the migration, and starts web (`:3000`) + worker.
 
-Open [localhost:3000](http://localhost:3000), sign in with `MASTER_KEY`, create an agent. Then jump to the [Claude Code quickstart](/quickstart/claude-code).
+Open [localhost:3000](http://localhost:3000), sign in with `MASTER_KEY`, create
+an agent. Then jump to the [Claude Code quickstart](/quickstart/claude-code).
 
 <Note>
   `DATABASE_URL` must be a direct (non-pooled) Postgres connection. Prisma migrations need advisory locks that pgbouncer blocks.

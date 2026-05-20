@@ -1,0 +1,123 @@
+---
+title: "Claude Agent SDK"
+description: "Chat with a Kubernetes-sandboxed Claude Agent SDK session from your terminal."
+---
+
+The `lap` CLI detects the `claude-agent-sdk` harness automatically and switches
+to **chat REPL mode** — no WebSocket TTY, just a simple `>` prompt that sends
+each line to the agent and prints the response.
+
+<Note>
+  First time? Install the CLI and log in:
+
+  ```bash
+  git clone https://github.com/BerriAI/litellm-agent-platform.git
+  cd litellm-agent-platform/cli && npm install
+  ln -sf "$PWD/bin/lap.mjs" ~/.local/bin/lap
+  lap login   # paste your LAP URL + MASTER_KEY
+  ```
+</Note>
+
+## 1. Create an agent
+
+In the UI choose **claude-agent-sdk** from the Harness picker, or via API:
+
+```bash
+curl -X POST $LAP_URL/api/v1/managed_agents/agents \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-sdk-agent",
+    "harness_id": "claude-agent-sdk",
+    "model": "anthropic/claude-sonnet-4-5",
+    "prompt": "You are a helpful assistant.",
+    "repo_url": "https://github.com/your-org/your-repo"
+  }'
+```
+
+## 2. Open a session
+
+```bash
+lap my-sdk-agent
+```
+
+```
+  ✓ agent my-sdk-agent (0f21c021, harness=claude-agent-sdk)
+  ✓ session c3970704
+  waiting for sandbox. ready
+  Chat mode — Ctrl-D to exit
+
+  >
+```
+
+The sandbox spins up, clones the repo, and drops you into a chat prompt.
+Type a message and press **Enter**. The agent responds inline.
+
+```
+  > Summarise the top-level README in three bullets.
+  
+  Here's the README in three bullets:
+  - LiteLLM Agent Platform runs coding agents in sandboxed Kubernetes pods...
+  ...
+
+  >
+```
+
+Press **Ctrl-D** to end the session.
+
+## 3. How it works
+
+Each line you type is sent to `POST /sessions/:id/message`. The harness
+runs a full Claude Agent SDK turn — tool calls, file edits, multi-step
+reasoning — and returns when the turn is complete. The response text is
+printed and the prompt returns.
+
+The pod's env contains only stub credentials. The
+[vault proxy](/learn/vault-proxy) swaps them for real keys on every
+outbound TLS connection, so the agent never holds real API keys.
+
+## Creating agents via API (full options)
+
+```bash
+curl -X POST $LAP_URL/api/v1/managed_agents/agents \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-sdk-agent",
+    "harness_id": "claude-agent-sdk",
+    "model": "anthropic/claude-sonnet-4-5",
+    "prompt": "You are a senior engineer. Think step by step.",
+    "repo_url": "https://github.com/your-org/your-repo",
+    "branch": "main"
+  }'
+```
+
+## Local dev (no Kubernetes)
+
+You can run against a local harness without spinning up a kind cluster.
+Point `.env` at the local harness and the platform skips K8s entirely:
+
+```bash
+# .env additions
+LOCAL_SANDBOX_URL=http://localhost:4096
+WARM_POOL_SIZE=0
+```
+
+```bash
+# Start the harness
+cd harnesses/claude-agent-sdk && npm run build
+REPO_DIR=/path/to/local/repo \
+LITELLM_API_BASE=https://gateway.litellm.ai/ \
+LITELLM_API_KEY=sk-... \
+node dist/server.js
+
+# Start the platform
+npm run dev
+
+# Point lap at it
+lap login   # URL: http://localhost:3000
+lap my-sdk-agent
+```
+
+Sessions reach `ready` in under 2 seconds with `LOCAL_SANDBOX_URL`.
+See [CONTRIBUTING.md](https://github.com/BerriAI/litellm-agent-platform/blob/main/CONTRIBUTING.md) for the full local dev guide.

@@ -1,0 +1,41 @@
+---
+title: "Changelog"
+description: "What's new in LiteLLM Agent Platform."
+---
+
+<Update label="May 22, 2026" description="Weekly release">
+
+## New features
+
+- **REPL mode for Claude Agent SDK agents.** Talk to a running agent from your terminal with `lap <agent>` — a single streaming surface over the same session you'd see in the UI. See the [Claude Agent SDK quickstart](/quickstart/claude-agent-sdk).
+- **Interrupt a running turn.** Stop a long-running agent turn from the session view without killing the sandbox, then send a follow-up message in the same thread.
+- **Image attachments in chat.** Paste screenshots, drag-and-drop images, or attach files to the chat composer. Agents receive them as part of the turn.
+- **Screen recording for every agent.** Claude Agent SDK agents now ship with built-in screen recording tools, so agents can capture what they did in the sandbox.
+- **Live preview button.** Coding-agent sessions expose a **View Preview** button that opens the running app from inside the sandbox.
+- **Lazy sandboxes.** The agent brain now runs in the platform and only spins up a sandbox pod when one is actually needed — faster first turn, cheaper idle agents.
+- **Slack thread streaming.** Slack-triggered sessions stream progress live back into the Slack thread, with a single **View session** button linking to the full session in the UI.
+- **Connected repo on agent detail.** Each agent's detail page now shows the GitHub repo it's wired up to.
+- **Admin toggle for the inline harness.** Workspace admins can enable or disable the inline harness from settings.
+- **Extended thinking for opencode.** Toggle extended thinking per model when running agents on the opencode harness.
+
+## Updates
+
+- **Session UI overhaul.** Thinking blocks render inline, tool calls are grouped, the Tasks sidebar updates as the agent works, and session rows in the sidebar are labeled with the first user message instead of a short ID.
+- **Slack-triggered sessions** now paint in any open tab without a refresh, and prior thread messages are pulled in when an agent is `@mentioned` mid-thread.
+- **Helm-style template versioning.** Agent templates are now versioned, and existing agents can resync to the latest template version.
+- **Unified agent form.** Creating and editing an agent now use the same form fields, so options stay consistent across both flows.
+- **Environment variables on agent detail.** Configured env vars are shown as key/value pairs on the agent detail page.
+
+## Bug fixes
+
+- Fixed memory tool calls returning 401 — `search_memory` and `save_memory` now route through the [vault proxy](/learn/vault-proxy) correctly.
+- Fixed session threads losing state across navigation — open sessions now persist as you move around the app.
+- Fixed user messages occasionally rendering blank or out of order in the session view.
+- Fixed double scrollbars in long session threads — one scroll for the whole thread, not one per message.
+- Fixed **Open in LAP** links from integrations pointing at the agent page instead of the session.
+- Fixed a unique-constraint crash when spawning a new session from an integration.
+- Fixed a 500 on message send when the database was briefly unavailable — now returns a retryable 503.
+- Fixed the sandbox MCP provision route returning 404 in some workspaces.
+- Fixed agent session heartbeats during the first turn so long initial tasks don't get marked stale.
+
+</Update>

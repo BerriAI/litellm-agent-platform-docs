@@ -1,0 +1,49 @@
+---
+title: "TTY Authentication"
+description: "How HARNESS_AUTH_TOKEN secures terminal connections to sandbox pods."
+---
+
+Every sandbox pod exposes a `/tty` WebSocket endpoint that the `lap` CLI and browser terminal attach to. Access is gated by a shared secret — `HARNESS_AUTH_TOKEN`.
+
+## Why it exists
+
+AWS ALB (and most corporate proxies) strip `Authorization` headers from WebSocket upgrade requests. A header-only auth scheme would silently fail behind a load balancer. The harness accepts the token as a `?token=` query parameter instead, which survives the upgrade.
+
+## How it flows
+
+```
+litellm-env secret
+  └─ HARNESS_AUTH_TOKEN=<value>
+        │
+        ├─► web/worker pod env  ──► toApiSession() returns tty_token in session API
+        │                                │
+        │                                └─► lap CLI appends ?token=<value> to WS URL
+        │
+        └─► sandbox pod env (injected at creation)
+              └─► harness verifies ?token= on every /tty connect
+```
+
+If `HARNESS_AUTH_TOKEN` is absent from the platform env, `tty_token` in the session response is `null` — the CLI connects with no token and the harness returns 401.
+
+## Bootstrap
+
+The deploy pipeline seeds `HARNESS_AUTH_TOKEN` automatically on first deploy. For existing clusters, set it once:
+
+```bash
+token=$(openssl rand -hex 32)
+kubectl patch secret litellm-env -n default --type=json -p="[
+  {\"op\":\"add\",\"path\":\"/data/HARNESS_AUTH_TOKEN\",\"value\":\"$(printf '%s' "$token" | base64 | tr -d '\n')\"}
+]"
+kubectl rollout restart deployment/litellm-web deployment/litellm-worker
+```
+
+<Warning>
+  Existing warm-pool pods were created without the token and will still return 401. Delete them after the restart so new pods pick up the value.
+</Warning>
+
+## Rotating the token
+
+1. Generate a new value: `openssl rand -hex 32`
+2. Update the secret and restart web + worker (same commands as bootstrap above).
+3. All **new** sessions pick up the new token immediately.
+4. Any **active** session (already `ready`) holds the old token in its `tty_token` field — those sessions will stop accepting TTY connections after the rotation until restarted.

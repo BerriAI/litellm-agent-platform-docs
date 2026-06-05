@@ -55,7 +55,8 @@
             "pages": [
               "learn/architecture",
               "learn/vault-proxy",
-              "learn/sandboxes"
+              "learn/sandboxes",
+              "learn/tty-auth"
             ]
           },
           {

@@ -22,10 +22,20 @@
   "appearance": {
     "default": "light"
   },
+  "api": {
+    "openapi": "openapi.json",
+    "playground": {
+      "display": "interactive"
+    },
+    "examples": {
+      "languages": ["curl", "python", "javascript"],
+      "autogenerate": true
+    }
+  },
   "navbar": {
     "primary": {
       "type": "github",
-      "href": "https://github.com/BerriAI/litellm-agent-platform"
+      "href": "https://github.com/LiteLLM-Labs/litellm-agent-platform"
     }
   },
   "navigation": {
@@ -43,17 +53,19 @@
           {
             "group": "Quickstart",
             "pages": [
-              "quickstart/claude-code",
-              "quickstart/claude-agent-sdk",
-              "quickstart/codex",
-              "quickstart/hermes",
-              "quickstart/gemini"
+              "quickstart/claude-managed-agents",
+              "quickstart/cursor",
+              "quickstart/opencode",
+              "quickstart/deepagents",
+              "quickstart/elastic-runtime"
             ]
           },
           {
             "group": "Learn",
             "pages": [
               "learn/architecture",
+              "learn/auth",
+              "learn/mcp",
               "learn/vault-proxy",
               "learn/sandboxes"
             ]
@@ -62,6 +74,65 @@
             "group": "FAQ",
             "pages": [
               "faq"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["api-reference/overview"]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "api-reference/agents/list",
+              "api-reference/agents/create",
+              "api-reference/agents/get",
+              "api-reference/agents/update",
+              "api-reference/agents/delete"
+            ]
+          },
+          {
+            "group": "Sessions",
+            "pages": [
+              "api-reference/sessions/create",
+              "api-reference/sessions/send-event",
+              "api-reference/sessions/stream"
+            ]
+          },
+          {
+            "group": "Runtimes",
+            "pages": [
+              "api-reference/runtimes/list",
+              "api-reference/runtimes/create",
+              "api-reference/runtimes/update",
+              "api-reference/runtimes/delete"
+            ]
+          },
+          {
+            "group": "Gateway",
+            "pages": [
+              "api-reference/messages",
+              "api-reference/models",
+              "api-reference/mcp"
+            ]
+          },
+          {
+            "group": "API Keys",
+            "pages": [
+              "api-reference/keys/list",
+              "api-reference/keys/create",
+              "api-reference/keys/delete"
+            ]
+          },
+          {
+            "group": "System",
+            "pages": [
+              "api-reference/system/health",
+              "api-reference/system/capabilities"
             ]
           }
         ]

@@ -47,11 +47,11 @@
             "group": "Get started",
             "pages": [
               "introduction",
-              "installation"
+              "quickstart"
             ]
           },
           {
-            "group": "Quickstart",
+            "group": "Runtimes",
             "pages": [
               "quickstart/claude-managed-agents",
               "quickstart/cursor",
@@ -61,21 +61,21 @@
             ]
           },
           {
+            "group": "Channels",
+            "pages": [
+              "channels/ui",
+              "channels/api",
+              "channels/slack"
+            ]
+          },
+          {
             "group": "Learn",
             "pages": [
               "learn/architecture",
               "learn/auth",
-              "learn/mcp",
-              "learn/vault-proxy",
-              "learn/sandboxes"
+              "learn/mcp"
             ]
           },
-          {
-            "group": "FAQ",
-            "pages": [
-              "faq"
-            ]
-          }
         ]
       },
       {

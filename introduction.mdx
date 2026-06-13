@@ -1,32 +1,36 @@
 ---
 title: "Introduction"
-description: "Run agents in sandboxes."
+description: "1 place to call all your agents - OpenCode, Hermes, Claude Managed Agents, Cursor Agents API, DeepAgents."
 ---
 
-Self-hosted Kubernetes infrastructure for Claude Code, Codex, and any coding agent — **without ever giving them your real API keys**. A vault proxy swaps stub credentials for real keys at the wire level, so agents never hold the real values.
+[![Discord](https://img.shields.io/badge/Discord-Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/Nkxw3rm3EE)
 
-<img src="/images/lap-demo.gif" alt="LiteLLM Agent Platform demo" />
+![LiteLLM Agent Platform dashboard](https://github.com/user-attachments/assets/04333758-829c-4b19-bde3-23ade37bb9f1)
 
-```bash
-$ lap claude-code-cli1
-```
+LiteLLM Agent Platform sits on top of any runtime. Pick a runtime, create an
+agent, give your team one UI.
 
-## How it works
+It manages:
 
-<img src="/images/architecture.svg" alt="LiteLLM Agent Platform architecture: sandbox pod containing Claude Code, Codex, opencode, Agent SDK harnesses, with a vault sidecar that swaps stub credentials for real keys before outbound HTTPS" />
+- **Unified API across runtimes** - one API to create and run agents,
+  regardless of the runtime underneath
+- **Access** - developers create and run agents here, no Bedrock or Anthropic
+  console access required
+- **Session management** - persistent agent sessions across runs
+- **CRON schedules** - run agents on a schedule
+- **Memory** - agents remember context across sessions
 
-The agent process only ever sees stub credentials. The vault sidecar swaps them for real keys at the wire level, so real values exist only in the sidecar's memory — never in the agent process, never logged, never stored.
-
-## Get started
-
-<CardGroup cols={3}>
-  <Card title="Install" icon="bolt" href="/installation">
-    Run locally on kind, or deploy to AWS EKS.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="bolt" href="/quickstart">
+    Run LAP locally with Docker in under a minute.
   </Card>
-  <Card title="Run Claude Code" icon="robot" href="/quickstart/claude-code">
-    Open your first sandbox from the terminal.
+  <Card title="Runtimes" icon="server" href="/quickstart/claude-managed-agents">
+    Claude Managed Agents, Cursor, OpenCode, DeepAgents, Elastic.
   </Card>
-  <Card title="Learn the vault" icon="shield-halved" href="/learn/vault-proxy">
-    How agents stay isolated from real credentials.
+  <Card title="Channels" icon="comments" href="/channels/ui">
+    Talk to agents via UI, API, or Slack.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Full REST API reference with live try-it panel.
   </Card>
 </CardGroup>
